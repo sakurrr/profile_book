@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'app/router.dart';
+import 'app/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -8,10 +12,6 @@ Future<void> main() async {
     url: const String.fromEnvironment('SUPABASE_URL'),
     publishableKey: const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
   );
-  final auth = Supabase.instance.client.auth;
-  if (auth.currentSession == null) {
-    await auth.signInAnonymously();
-  }
   runApp(const ProviderScope(child: App()));
 }
 
@@ -20,13 +20,15 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    return MaterialApp(
-      title: 'プロフィール帳',
-      home: Scaffold(
-        appBar: AppBar(title: const Text('プロフィール帳')),
-        body: Center(child: Text('ログイン中のユーザー：$userId')),
-      ),
+    return MaterialApp.router(
+      title: 'prome',
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(),
+      // 端末の言語によらず、日本語の字形で表示する。
+      locale: const Locale('ja'),
+      supportedLocales: const [Locale('ja')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      routerConfig: appRouter,
     );
   }
 }
