@@ -585,6 +585,11 @@ class ProfileBookCard extends StatelessWidget {
                           color: AppColors.subText,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        profile.publicIdLabel,
+                        style: serif(size: 10, color: AppColors.subText),
+                      ),
                     ],
                   ),
                 ),

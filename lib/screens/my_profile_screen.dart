@@ -43,6 +43,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
 
   Profile _draft() => Profile(
     id: _initial.id,
+    publicId: _initial.publicId,
     nickname: _nickname.text.trim(),
     fullName: _orNull(_fullName),
     nameRomaji: _orNull(_romaji),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class Profile {
   const Profile({
     required this.id,
+    required this.publicId,
     required this.nickname,
     this.fullName,
     this.nameRomaji,
@@ -16,6 +17,7 @@ class Profile {
   });
 
   final String id;
+  final String publicId;
   final String nickname;
   final String? fullName;
   final String? nameRomaji;
@@ -27,6 +29,8 @@ class Profile {
   final String? avatarAsset;
 
   String get displayName => fullName ?? nickname;
+
+  String get publicIdLabel => '#$publicId';
 
   String? get birthdayLabel =>
       birthMonth == null ? null : '$birthMonth月$birthDay日';
@@ -83,6 +87,7 @@ class Friend {
 
 const _hana = Profile(
   id: 'hana',
+  publicId: '7F3A92C1',
   nickname: 'はな',
   fullName: '佐藤 はな',
   nameRomaji: 'HANA SATO',
@@ -93,6 +98,12 @@ const _hana = Profile(
   message: '小さな喫茶店がすき。\nいつか一緒に、おいしいクリームソーダを飲みに行こう！',
   avatarAsset: 'assets/avatars/hana.png',
 );
+
+/// ダミーの友だちに、毎回同じ表示用IDを割り当てる。
+String _dummyPublicId(String id) {
+  final hash = id.codeUnits.fold(17, (value, unit) => value * 131 + unit);
+  return (hash & 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
+}
 
 Friend _friend(
   String id,
@@ -106,6 +117,7 @@ Friend _friend(
 }) => Friend(
   profile: Profile(
     id: id,
+    publicId: _dummyPublicId(id),
     nickname: fullName.split(' ').last,
     fullName: fullName,
     likes: [like],
@@ -172,6 +184,7 @@ class MyProfileNotifier extends Notifier<Profile> {
   @override
   Profile build() => const Profile(
     id: 'mio',
+    publicId: 'A4E1C07B',
     nickname: 'みお',
     fullName: '小林 みお',
     nameRomaji: 'MIO KOBAYASHI',
