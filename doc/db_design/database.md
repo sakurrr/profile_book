@@ -35,6 +35,7 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | カラム | 型 | NULL | 説明 |
 |---|---|---|---|
 | `id` | uuid | 不可 | 主キー。`auth.users.id` と同じ値 |
+| `public_id` | text | 不可 | 画面に表示するID。本人の確認と同名の区別に使う。自動発行、ユニーク、変更不可 |
 | `nickname` | text | 不可 | 呼んでほしい名前。空白のみは不可 |
 | `full_name` | text | 可 | 名前 |
 | `name_romaji` | text | 可 | ローマ字表記の名前 |
@@ -46,6 +47,16 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | `avatar_path` | text | 可 | Storage上のパス |
 | `created_at` | timestamptz | 不可 | 作成日時 |
 | `updated_at` | timestamptz | 不可 | 更新日時。トリガーで更新 |
+
+IDは次の3種類を使い分ける。
+
+| 種類 | 用途 | 画面表示 | 変更 |
+|---|---|---|---|
+| `profiles.id` | FK、RLS | しない | 不可 |
+| `profiles.public_id` | 本人の確認、同名の区別 | `#7F3A92C1` の形式で表示 | 不可 |
+| `exchange_codes.token` | QRコード、共有リンク | しない | 再発行で変わる |
+
+`public_id` では検索も交換もできない。交換にはQRコードか共有リンクのトークンが必要である。登録時にまれに重複した場合はUNIQUE制約でサインアップが失敗し、再度登録すれば別の値になる。
 
 ### `exchange_codes`
 
@@ -86,6 +97,7 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 ```sql
 create table public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
+  public_id   text not null unique default upper(left(gen_random_uuid()::text, 8)),
   nickname    text not null check (char_length(btrim(nickname)) > 0),
   full_name   text,
   name_romaji text,
@@ -186,7 +198,7 @@ create index friendships_friend
 
 有効なコードを読み取ったログイン済みユーザーは、確認画面で持ち主の次の項目を見られる。申請を受けた人も、承認前に申請者の同じ項目を見られる。
 
-`nickname`、`full_name`、`name_romaji`、誕生日、`likes`、`message`、アバター
+`public_id`、`nickname`、`full_name`、`name_romaji`、誕生日、`likes`、`message`、アバター
 
 `hobby` は確認画面に表示しないので、交換が成立するまで公開しない。コードを見せない限り公開されないが、保存した画像や共有リンクが第三者に渡ると、ログイン済みの誰でも確認画面を開ける。この場合はコードの再発行で止める。
 

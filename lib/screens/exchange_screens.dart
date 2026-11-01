@@ -178,6 +178,10 @@ class _ShowCodeView extends ConsumerWidget {
                                 color: AppColors.subText,
                               ),
                             ),
+                            Text(
+                              profile.publicIdLabel,
+                              style: serif(size: 9, color: AppColors.subText),
+                            ),
                           ],
                         ),
                       ],
