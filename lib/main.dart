@@ -24,6 +24,13 @@ class App extends StatelessWidget {
       title: 'prome',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
+      // スクロールのオーバースクロールの挙動を無効化する。
+      builder: (context, child) {
+        return ScrollConfiguration(
+          behavior: const MaterialScrollBehavior().copyWith(overscroll: false),
+          child: child!,
+        );
+      },
       // 端末の言語によらず、日本語の字形で表示する。
       locale: const Locale('ja'),
       supportedLocales: const [Locale('ja')],
