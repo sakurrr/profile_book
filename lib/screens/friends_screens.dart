@@ -6,6 +6,19 @@ import '../app/theme.dart';
 import '../data/mock_data.dart';
 import '../widgets/common.dart';
 
+/// 友だち一覧の並び替えの方法
+enum _FriendSort {
+  exchangedAt,
+
+  ///交換した順
+  name,
+
+  ///名前順
+  birthday,
+
+  ///誕生日順
+}
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,6 +30,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _query = '';
   bool _favoritesOnly = false;
 
+  _FriendSort _sort = _FriendSort.exchangedAt;
+  String get _sortLabel {
+    switch (_sort) {
+      case _FriendSort.exchangedAt:
+        return '交換した順';
+      case _FriendSort.name:
+        return '名前順';
+      case _FriendSort.birthday:
+        return '誕生日順';
+    }
+  }
+
   bool _matches(Friend friend) {
     if (_favoritesOnly && !friend.isFavorite) return false;
     final profile = friend.profile;
@@ -27,12 +52,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ].any((text) => text.contains(_query));
   }
 
+  void _sortFriends(List<Friend> friends) {
+    friends.sort((a, b) {
+      switch (_sort) {
+        case _FriendSort.exchangedAt:
+          return b.exchangedAt.compareTo(a.exchangedAt);
+        case _FriendSort.name:
+          final result = a.profile.displayName.compareTo(b.profile.displayName);
+          if (result != 0) return result;
+          return a.exchangedAt.compareTo(b.exchangedAt);
+        case _FriendSort.birthday:
+          final aMonth = a.profile.birthMonth;
+          final aDay = a.profile.birthDay;
+          final bMonth = b.profile.birthMonth;
+          final bDay = b.profile.birthDay;
+
+          final aHasBirthday = aMonth != null && aDay != null;
+          final bHasBirthday = bMonth != null && bDay != null;
+
+          if (!aHasBirthday && !bHasBirthday) {
+            return a.profile.displayName.compareTo(b.profile.displayName);
+          } //両方誕生日が登録されていない時は名前順で表示する
+
+          if (!aHasBirthday) return 1;
+          if (!bHasBirthday) return -1;
+
+          // 誕生月を比較する
+          final monthCompare = aMonth.compareTo(bMonth);
+          if (monthCompare != 0) return monthCompare;
+          //  誕生日を比較する
+          final dayCompare = aDay.compareTo(bDay);
+          if (dayCompare != 0) return dayCompare;
+
+          // 誕生日が同じ場合は名前順で表示する
+          return a.profile.displayName.compareTo(b.profile.displayName);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final friends = ref.watch(friendsProvider);
     final nickname = ref.watch(myProfileProvider).nickname;
     final favorites = friends.where((f) => f.isFavorite).length;
     final visible = friends.where(_matches).toList();
+    _sortFriends(visible);
 
     return Scaffold(
       body: SafeArea(
@@ -78,14 +142,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   style: serif(size: 16, color: AppColors.accent),
                 ),
                 const Spacer(),
-                const Text(
-                  '交換した順',
-                  style: TextStyle(fontSize: 10, color: AppColors.subText),
+
+                PopupMenuButton<_FriendSort>(
+                  initialValue: _sort,
+                  onSelected: (value) {
+                    setState(() {
+                      _sort = value;
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: _FriendSort.exchangedAt,
+                      child: Text('交換した順'),
+                    ),
+                    const PopupMenuItem(
+                      value: _FriendSort.name,
+                      child: Text('名前順'),
+                    ),
+                    const PopupMenuItem(
+                      value: _FriendSort.birthday,
+                      child: Text('誕生日順'),
+                    ),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _sortLabel,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.subText,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.sort,
+                        size: 16,
+                        color: AppColors.subText,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.sort, size: 16),
               ],
             ),
+
             const SizedBox(height: 10),
             Row(
               children: [
@@ -263,9 +363,7 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _memo = TextEditingController(
-      text: _find(ref.read(friendsProvider))?.memo,
-    );
+    _memo = TextEditingController(text: _find(ref.read(friendsProvider))?.memo);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(friendsProvider.notifier).markViewed(widget.friendId);

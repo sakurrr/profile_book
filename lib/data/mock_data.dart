@@ -35,9 +35,8 @@ class Profile {
   String? get birthdayLabel =>
       birthMonth == null ? null : '$birthMonth月$birthDay日';
 
-  String? get zodiac => birthMonth == null
-      ? null
-      : zodiacOf(birthMonth!, birthDay!);
+  String? get zodiac =>
+      birthMonth == null ? null : zodiacOf(birthMonth!, birthDay!);
 
   /// ホームのカードや確認画面で使う、ひとことの1行目。
   String? get messageHeadline => message?.split('\n').first;
@@ -53,8 +52,19 @@ class Profile {
 
 String zodiacOf(int month, int day) {
   const names = [
-    'やぎ座', 'みずがめ座', 'うお座', 'おひつじ座', 'おうし座', 'ふたご座',
-    'かに座', 'しし座', 'おとめ座', 'てんびん座', 'さそり座', 'いて座', 'やぎ座',
+    'やぎ座',
+    'みずがめ座',
+    'うお座',
+    'おひつじ座',
+    'おうし座',
+    'ふたご座',
+    'かに座',
+    'しし座',
+    'おとめ座',
+    'てんびん座',
+    'さそり座',
+    'いて座',
+    'やぎ座',
   ];
   const startDays = [20, 19, 21, 20, 21, 22, 23, 23, 23, 24, 23, 22];
   return names[day < startDays[month - 1] ? month - 1 : month];
@@ -114,12 +124,16 @@ Friend _friend(
   String? avatar,
   bool favorite = false,
   bool isNew = false,
+  int? birthMonth,
+  int? birthDay,
 }) => Friend(
   profile: Profile(
     id: id,
     publicId: _dummyPublicId(id),
     nickname: fullName.split(' ').last,
     fullName: fullName,
+    birthMonth: birthMonth,
+    birthDay: birthDay,
     likes: [like],
     message: message,
     avatarAsset: avatar,
@@ -136,12 +150,37 @@ final _initialFriends = [
     isNew: true,
     memo: '次は駅前の喫茶店に誘ってみよう。',
   ),
-  _friend('sota', '高橋 そうた', 'フィルム写真', '休日はカメラと散歩。', 1,
-      avatar: 'assets/avatars/sota.png', isNew: true),
-  _friend('yui', '田中 ゆい', 'お菓子づくり', 'おいしいものは正義！', 2,
-      avatar: 'assets/avatars/yui.png'),
-  _friend('ren', '伊藤 れん', '読書', 'おすすめの本、教えて。', 3,
-      avatar: 'assets/avatars/ren.png'),
+  _friend(
+    'sota',
+    '高橋 そうた',
+    'フィルム写真',
+    '休日はカメラと散歩。',
+    1,
+    avatar: 'assets/avatars/sota.png',
+    isNew: true,
+    birthMonth: 3,
+    birthDay: 15,
+  ),
+  _friend(
+    'yui',
+    '田中 ゆい',
+    'お菓子づくり',
+    'おいしいものは正義！',
+    2,
+    avatar: 'assets/avatars/yui.png',
+    birthMonth: 7,
+    birthDay: 20,
+  ),
+  _friend(
+    'ren',
+    '伊藤 れん',
+    '読書',
+    'おすすめの本、教えて。',
+    3,
+    avatar: 'assets/avatars/ren.png',
+    birthMonth: 12,
+    birthDay: 25,
+  ),
   _friend('aoi', '山本 あおい', '映画', '週末は映画館にいます。', 4, favorite: true),
   _friend('kaito', '中村 かいと', 'サッカー', '朝ランはじめました。', 5, favorite: true),
   _friend('mei', '小川 めい', 'ねこ', 'うちのねこ、見てほしい。', 6, favorite: true),
