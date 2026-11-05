@@ -43,6 +43,12 @@ final appRouter = GoRouter(
                     token: state.uri.queryParameters['token'],
                   ),
                 ),
+                GoRoute(
+                  path: 'requests/:id',
+                  builder: (_, state) => ExchangeRequestScreen(
+                    requestId: state.pathParameters['id']!,
+                  ),
+                ),
               ],
             ),
           ],

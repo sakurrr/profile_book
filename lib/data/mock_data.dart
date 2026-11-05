@@ -39,7 +39,7 @@ class Profile {
       ? null
       : zodiacOf(birthMonth!, birthDay!);
 
-  /// ホームのカードや確認画面で使う、ひとことの1行目。
+  /// ホームのカードで使う、ひとことの1行目。
   String? get messageHeadline => message?.split('\n').first;
 
   /// 「Hana's profile book」の表示に使う、ローマ字の名前の先頭。
@@ -171,6 +171,8 @@ class FriendsNotifier extends Notifier<List<Friend>> {
   void updateMemo(String id, String memo) =>
       _update(id, (f) => f.copyWith(memo: memo));
 
+  void add(Friend friend) => state = [friend, ...state];
+
   void remove(String id) {
     state = state.where((f) => f.profile.id != id).toList();
   }
@@ -219,10 +221,50 @@ final exchangeTokenProvider = NotifierProvider<ExchangeTokenNotifier, String>(
   ExchangeTokenNotifier.new,
 );
 
-/// 動作確認用のトークン。読み取ると佐藤はなさんの確認画面を開く。
+/// 動作確認用のトークン。読み取ると、交換済みの佐藤はなさんを指す。
 const demoFriendToken = 'demo-hana';
 
-String exchangeLink(String token) => 'prome://exchange?token=$token';
+/// 動作確認用のトークン。読み取ると、まだ交換していない森そらさんを指す。
+const demoStrangerToken = 'demo-sora';
+
+const _sora = Profile(
+  id: 'sora',
+  publicId: '3B9D0E52',
+  nickname: 'そら',
+  fullName: '森 そら',
+  likes: ['星空', 'プラネタリウム'],
+  message: '夜の散歩がすき。',
+);
+
+const _rina = Profile(
+  id: 'rina',
+  publicId: 'C2F81A6D',
+  nickname: 'りな',
+  fullName: '石井 りな',
+  likes: ['パン屋'],
+  message: '焼きたてのパンの匂いがすき。',
+);
+
+const _yuzu = Profile(
+  id: 'yuzu',
+  publicId: '5E07B3F9',
+  nickname: 'ゆず',
+  fullName: '岡田 ゆず',
+  likes: ['水族館'],
+  message: 'くらげをずっと見ていられる。',
+);
+
+const _profilesByToken = {demoFriendToken: _hana, demoStrangerToken: _sora};
+
+/// 交換が成立したときに友だちの帳へ加える、モックのプロフィール。
+const _profilesById = {
+  'hana': _hana,
+  'sora': _sora,
+  'rina': _rina,
+  'yuzu': _yuzu,
+};
+
+String exchangeQrData(String token) => 'prome://exchange?token=$token';
 
 /// QRコードの内容からトークンを取り出す。形式が違えば null。
 String? parseExchangeToken(String? raw) {
@@ -233,6 +275,124 @@ String? parseExchangeToken(String? raw) {
   return uri.queryParameters['token'];
 }
 
-/// `preview-exchange-code` の代わりのダミー。
-Profile? previewByToken(String? token) =>
-    token == demoFriendToken ? _hana : null;
+/// 交換前の相手について見せてよい項目。`public_id` と `nickname` だけを持つ。
+class ExchangeParty {
+  const ExchangeParty({
+    required this.id,
+    required this.publicId,
+    required this.nickname,
+  });
+
+  ExchangeParty.of(Profile profile)
+    : id = profile.id,
+      publicId = profile.publicId,
+      nickname = profile.nickname;
+
+  final String id;
+  final String publicId;
+  final String nickname;
+
+  String get publicIdLabel => '#$publicId';
+}
+
+/// `preview_exchange_code` が返す、読み取った人とコードの持ち主の関係。
+enum ExchangeRelation { none, self, friend, pendingOutgoing, pendingIncoming }
+
+class ExchangePreview {
+  const ExchangePreview({required this.party, required this.relation});
+
+  final ExchangeParty party;
+  final ExchangeRelation relation;
+}
+
+/// `exchange_requests` の `pending` の1行と、申請者の公開項目。
+class ExchangeRequest {
+  const ExchangeRequest({required this.id, required this.requester});
+
+  final String id;
+  final ExchangeParty requester;
+}
+
+/// 自分が送った `pending` の申請の相手。
+class OutgoingRequestsNotifier extends Notifier<List<ExchangeParty>> {
+  @override
+  List<ExchangeParty> build() => const [];
+
+  void request(ExchangeParty party) => state = [...state, party];
+
+  void cancel(String partyId) =>
+      state = state.where((p) => p.id != partyId).toList();
+}
+
+final outgoingRequestsProvider =
+    NotifierProvider<OutgoingRequestsNotifier, List<ExchangeParty>>(
+      OutgoingRequestsNotifier.new,
+    );
+
+/// 自分宛ての `pending` の申請。`list_incoming_exchange_requests` の代わり。
+class IncomingRequestsNotifier extends Notifier<List<ExchangeRequest>> {
+  @override
+  List<ExchangeRequest> build() => [
+    ExchangeRequest(id: 'req-rina', requester: ExchangeParty.of(_rina)),
+  ];
+
+  /// `respond_exchange` の代わり。承認すると友だちの帳に加える。
+  void respond(String requestId, {required bool accept}) {
+    final request = state.firstWhere((r) => r.id == requestId);
+    state = state.where((r) => r.id != requestId).toList();
+    if (accept) {
+      ref
+          .read(friendsProvider.notifier)
+          .add(
+            Friend(
+              profile: _profilesById[request.requester.id]!,
+              exchangedAt: DateTime.now(),
+              isNew: true,
+            ),
+          );
+    }
+  }
+
+  /// Realtimeで申請が届いたときの動きを、開発中に試すためのもの。
+  void simulateArrival() {
+    if (state.any((r) => r.id == 'req-yuzu')) return;
+    state = [
+      ...state,
+      ExchangeRequest(id: 'req-yuzu', requester: ExchangeParty.of(_yuzu)),
+    ];
+  }
+}
+
+final incomingRequestsProvider =
+    NotifierProvider<IncomingRequestsNotifier, List<ExchangeRequest>>(
+      IncomingRequestsNotifier.new,
+    );
+
+/// `preview_exchange_code` の代わり。無効なトークンなら null。
+final exchangePreviewProvider = Provider.family<ExchangePreview?, String?>((
+  ref,
+  token,
+) {
+  final me = ref.watch(myProfileProvider);
+  if (token != null && token == ref.watch(exchangeTokenProvider)) {
+    return ExchangePreview(
+      party: ExchangeParty.of(me),
+      relation: ExchangeRelation.self,
+    );
+  }
+  final owner = _profilesByToken[token];
+  if (owner == null) return null;
+  final relation = switch (owner.id) {
+    final id when ref.watch(friendsProvider).any((f) => f.profile.id == id) =>
+      ExchangeRelation.friend,
+    final id when ref.watch(outgoingRequestsProvider).any((p) => p.id == id) =>
+      ExchangeRelation.pendingOutgoing,
+    final id
+        when ref
+            .watch(incomingRequestsProvider)
+            .any((r) => r.requester.id == id) =>
+      ExchangeRelation.pendingIncoming,
+    _ => ExchangeRelation.none,
+  };
+  return ExchangePreview(party: ExchangeParty.of(owner), relation: relation);
+});

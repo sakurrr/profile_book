@@ -450,27 +450,23 @@ class HeroBanner extends StatelessWidget {
   );
 }
 
-/// ともだちの詳細、追加の確認、自分の見え方で共通のプロフィール帳カード。
+/// ともだちの詳細と自分の見え方で共通のプロフィール帳カード。
 class ProfileBookCard extends StatelessWidget {
   const ProfileBookCard({
     super.key,
     required this.profile,
     this.trailing,
-    this.showHobby = true,
-    this.headlineOnly = false,
     this.footer,
   });
 
   final Profile profile;
   final Widget? trailing;
-  final bool showHobby;
-  final bool headlineOnly;
   final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     final likes = profile.likes ?? const <String>[];
-    final message = headlineOnly ? profile.messageHeadline : profile.message;
+    final message = profile.message;
     return PaperCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -502,7 +498,7 @@ class ProfileBookCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                 ],
-                if (showHobby && profile.hobby != null) ...[
+                if (profile.hobby != null) ...[
                   const _CaptionLabel('趣味'),
                   const SizedBox(height: 6),
                   Text(profile.hobby!, style: const TextStyle(fontSize: 13)),
