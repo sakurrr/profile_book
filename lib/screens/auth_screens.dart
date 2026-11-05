@@ -135,10 +135,12 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreen extends State<SignupScreen> {
   final nameController = TextEditingController();
+  final furiganaController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
   String name = '';
+  String furigana = '';
   String email = '';
   String password = '';
   @override
@@ -167,8 +169,14 @@ class _SignupScreen extends State<SignupScreen> {
           const FieldLabel('呼んでほしい名前'),
           TextField(
             style: TextStyle(fontSize: 14),
-            decoration: InputDecoration(hintText: '例：みお'),
+            decoration: InputDecoration(hintText: '例：佐藤みお'),
             controller: nameController,
+          ),
+          const FieldLabel('ふりがな'),
+          TextField(
+            style: TextStyle(fontSize: 14),
+            decoration: InputDecoration(hintText: '例：さとうみお'),
+            controller: furiganaController,
           ),
           const SizedBox(height: 14),
           const FieldLabel('メールアドレス'),
@@ -189,13 +197,16 @@ class _SignupScreen extends State<SignupScreen> {
             onPressed: () {
               setState(() {
                 name = nameController.text;
+                furigana = furiganaController.text;
                 email = emailController.text;
                 password = passwordController.text;
               });
               //context.go('/friends');//画面遷移
             },
           ),
-          Text('name: $name, email: $email, password: $password'),
+          Text(
+            'name: $name, furigana: $furigana, email: $email, password: $password',
+          ),
           const SizedBox(height: 12),
           const Text(
             '登録後、メールアドレスの確認に進みます。',
