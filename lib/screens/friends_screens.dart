@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/mock_data.dart';
@@ -14,6 +15,41 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウトしますか？'),
+        content: const Text('ログイン画面に戻ります。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ログアウト'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await Supabase.instance.client.auth.signOut();
+
+      if (!mounted) return;
+      context.go('/login');
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ログアウトに失敗しました。もう一度お試しください。')),
+      );
+    }
+  }
+
   String _query = '';
   bool _favoritesOnly = false;
 
@@ -42,21 +78,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           children: [
             BrandHeader(
-              trailing: Badge.count(
-                count: incoming.length,
-                isLabelVisible: incoming.isNotEmpty,
-                backgroundColor: AppColors.accent,
-                child: CircleIconButton(
-                  icon: Icons.notifications_none,
-                  // 届いた申請の一覧ができるまでは、古い申請から1件ずつ開く。
-                  onPressed: () => incoming.isEmpty
-                      ? ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('交換リクエストは届いていません')),
-                        )
-                      : context.go('/exchange/requests/${incoming.first.id}'),
-                ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Badge.count(
+                    count: incoming.length,
+                    isLabelVisible: incoming.isNotEmpty,
+                    backgroundColor: AppColors.accent,
+                    child: CircleIconButton(
+                      icon: Icons.notifications_none,
+                      // 届いた申請の一覧ができるまでは、古い申請から1件ずつ開く。
+                      onPressed: () => incoming.isEmpty
+                          ? ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('交換リクエストは届いていません')),
+                            )
+                          : context.go(
+                              '/exchange/requests/${incoming.first.id}',
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleIconButton(
+                    icon: Icons.logout,
+                    onPressed: _confirmLogout,
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(height: 4),
             HeroBanner(
               eyebrow: '$nicknameさん、おかえりなさい',
@@ -274,9 +323,7 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _memo = TextEditingController(
-      text: _find(ref.read(friendsProvider))?.memo,
-    );
+    _memo = TextEditingController(text: _find(ref.read(friendsProvider))?.memo);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(friendsProvider.notifier).markViewed(widget.friendId);
