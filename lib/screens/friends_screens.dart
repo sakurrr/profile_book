@@ -33,6 +33,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final nickname = ref.watch(myProfileProvider).nickname;
     final favorites = friends.where((f) => f.isFavorite).length;
     final visible = friends.where(_matches).toList();
+    final incoming = ref.watch(incomingRequestsProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -41,9 +42,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           children: [
             BrandHeader(
-              trailing: CircleIconButton(
-                icon: Icons.notifications_none,
-                onPressed: () => showComingSoon(context, '届いた申請の画面'),
+              trailing: Badge.count(
+                count: incoming.length,
+                isLabelVisible: incoming.isNotEmpty,
+                backgroundColor: AppColors.accent,
+                child: CircleIconButton(
+                  icon: Icons.notifications_none,
+                  // 届いた申請の一覧ができるまでは、古い申請から1件ずつ開く。
+                  onPressed: () => incoming.isEmpty
+                      ? ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('交換リクエストは届いていません')),
+                        )
+                      : context.go('/exchange/requests/${incoming.first.id}'),
+                ),
               ),
             ),
             const SizedBox(height: 4),
