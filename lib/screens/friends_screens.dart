@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/mock_data.dart';
@@ -27,6 +28,41 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウトしますか？'),
+        content: const Text('ログイン画面に戻ります。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ログアウト'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await Supabase.instance.client.auth.signOut();
+
+      if (!mounted) return;
+      context.go('/login');
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ログアウトに失敗しました。もう一度お試しください。')),
+      );
+    }
+  }
+
   String _query = '';
   bool _favoritesOnly = false;
 
@@ -105,9 +141,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           children: [
             BrandHeader(
-              trailing: CircleIconButton(
-                icon: Icons.notifications_none,
-                onPressed: () => showComingSoon(context, '届いた申請の画面'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleIconButton(
+                    icon: Icons.notifications_none,
+                    onPressed: () => showComingSoon(context, '届いた申請の画面'),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleIconButton(
+                    icon: Icons.logout,
+                    onPressed: _confirmLogout,
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 4),
