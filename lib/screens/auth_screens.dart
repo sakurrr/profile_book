@@ -1,11 +1,33 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme.dart';
 import '../widgets/common.dart';
 
-class LoginScreen extends StatelessWidget {
+//ログイン画面
+//stateで情報を保持
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreen();
+}
+
+class _LoginScreen extends State<LoginScreen> {
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  String email = '';
+  String password = '';
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +45,10 @@ class LoginScreen extends StatelessWidget {
           const SectionTitle(number: '01', title: 'ログイン'),
           const SizedBox(height: 16),
           const FieldLabel('メールアドレス'),
-          const _EmailField(hint: '登録したメールアドレス'),
+          _EmailField(hint: '登録したメールアドレス', controller: emailController),
           const SizedBox(height: 14),
           const FieldLabel('パスワード'),
-          const _PasswordField(hint: 'パスワードを入力'),
+          _PasswordField(hint: 'パスワードを入力', controller: passwordController),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
@@ -40,8 +62,22 @@ class LoginScreen extends StatelessWidget {
           ),
           PrimaryButton(
             label: 'ログインする',
-            onPressed: () => context.go('/friends'),
+            //ここで，入力情報をバックエンドの「ログイン処理を行うAPI」をたたくと同時に渡したい
+
+            //1.入力されたメールアドレスとパスワードを取得
+            //2.バックエンドの認証APIをたたく
+            //3.認証が成功したら画面遷移
+            //4.認証失敗ならエラー表示
+            onPressed: () {
+              setState(() {
+                email = emailController.text;
+                password = passwordController.text;
+              });
+
+              //context.go('/friends'); //画面遷移(目的のページに直接ジャンプ，戻れない)
+            },
           ),
+          Text('email: $email , password: $password'),
         ],
       ),
       below: [
@@ -63,7 +99,8 @@ class LoginScreen extends StatelessWidget {
         SecondaryButton(
           label: '新しくアカウントを作成',
           color: AppColors.accent,
-          onPressed: () => context.push('/signup'),
+          onPressed: () =>
+              context.push('/signup'), //画面遷移（現在のページにあたら行くページを積み重ねる，戻れる）
         ),
         const SizedBox(height: 16),
         const Text(
@@ -88,8 +125,29 @@ class LoginScreen extends StatelessWidget {
   }
 }
 
-class SignupScreen extends StatelessWidget {
+//アカウント作成画面
+class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
+
+  @override
+  State<SignupScreen> createState() => _SignupScreen();
+}
+
+class _SignupScreen extends State<SignupScreen> {
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+
+  String name = '';
+  String email = '';
+  String password = '';
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,16 +165,17 @@ class SignupScreen extends StatelessWidget {
           const SectionTitle(number: '01', title: 'アカウント作成'),
           const SizedBox(height: 16),
           const FieldLabel('呼んでほしい名前'),
-          const TextField(
+          TextField(
             style: TextStyle(fontSize: 14),
             decoration: InputDecoration(hintText: '例：みお'),
+            controller: nameController,
           ),
           const SizedBox(height: 14),
           const FieldLabel('メールアドレス'),
-          const _EmailField(hint: '例：mio@example.com'),
+          _EmailField(hint: '例：mio@example.com', controller: emailController),
           const SizedBox(height: 14),
           const FieldLabel('パスワード'),
-          const _PasswordField(hint: 'パスワードを設定'),
+          _PasswordField(hint: 'パスワードを設定', controller: passwordController),
           const SizedBox(height: 8),
           const Text(
             '半角英字と数字を含む8文字以上',
@@ -125,8 +184,18 @@ class SignupScreen extends StatelessWidget {
           const SizedBox(height: 32),
           PrimaryButton(
             label: 'アカウントを作成する',
-            onPressed: () => context.go('/friends'),
+            //アカウント作成APIをたたく．入力された値をバックエンドに渡す．バックエンド側でDBへ登録
+            //アカウント作成が成功したらそのままログイン画面？？
+            onPressed: () {
+              setState(() {
+                name = nameController.text;
+                email = emailController.text;
+                password = passwordController.text;
+              });
+              //context.go('/friends');//画面遷移
+            },
           ),
+          Text('name: $name, email: $email, password: $password'),
           const SizedBox(height: 12),
           const Text(
             '登録後、メールアドレスの確認に進みます。',
@@ -175,36 +244,39 @@ class _AuthLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const BrandHeader(
-                trailing: Text(
-                  'プロフィール帳交換アプリ',
-                  style: TextStyle(fontSize: 9, color: AppColors.subText),
+        child: ScrollConfiguration(
+          behavior: const MaterialScrollBehavior().copyWith(overscroll: false),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const BrandHeader(
+                  trailing: Text(
+                    'プロフィール帳交換アプリ',
+                    style: TextStyle(fontSize: 9, color: AppColors.subText),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              banner,
-              const SizedBox(height: 24),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  PaperCard(
-                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
-                    child: card,
-                  ),
-                  Positioned(
-                    top: -8,
-                    right: 44,
-                    child: Tape(color: tapeColor),
-                  ),
-                ],
-              ),
-              ...below,
-            ],
+                const SizedBox(height: 4),
+                banner,
+                const SizedBox(height: 24),
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    PaperCard(
+                      padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+                      child: card,
+                    ),
+                    Positioned(
+                      top: -8,
+                      right: 44,
+                      child: Tape(color: tapeColor),
+                    ),
+                  ],
+                ),
+                ...below,
+              ],
+            ),
           ),
         ),
       ),
@@ -213,12 +285,14 @@ class _AuthLayout extends StatelessWidget {
 }
 
 class _EmailField extends StatelessWidget {
-  const _EmailField({required this.hint});
+  const _EmailField({required this.hint, required this.controller});
 
   final String hint;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) => TextField(
+    controller: controller,
     keyboardType: TextInputType.emailAddress,
     style: const TextStyle(fontSize: 14),
     decoration: InputDecoration(hintText: hint),
@@ -226,9 +300,10 @@ class _EmailField extends StatelessWidget {
 }
 
 class _PasswordField extends StatefulWidget {
-  const _PasswordField({required this.hint});
+  const _PasswordField({required this.hint, required this.controller});
 
   final String hint;
+  final TextEditingController controller;
 
   @override
   State<_PasswordField> createState() => _PasswordFieldState();
@@ -239,6 +314,7 @@ class _PasswordFieldState extends State<_PasswordField> {
 
   @override
   Widget build(BuildContext context) => TextField(
+    controller: widget.controller,
     obscureText: _obscured,
     style: const TextStyle(fontSize: 14),
     decoration: InputDecoration(
