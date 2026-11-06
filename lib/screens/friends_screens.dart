@@ -94,9 +94,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         case _FriendSort.exchangedAt:
           return b.exchangedAt.compareTo(a.exchangedAt);
         case _FriendSort.name:
-          final result = a.profile.displayName.compareTo(b.profile.displayName);
+          final kanaA = a.profile.nameKana?.trim() ?? '';
+          final kanaB = b.profile.nameKana?.trim() ?? '';
+          if (kanaA.isEmpty && kanaB.isNotEmpty) return 1;
+          if (kanaA.isNotEmpty && kanaB.isEmpty) return -1;
+          final result = kanaA.compareTo(kanaB);
           if (result != 0) return result;
+          final nameResult = a.profile.displayName.compareTo(
+            b.profile.displayName,
+          );
+          if (nameResult != 0) return nameResult;
           return a.exchangedAt.compareTo(b.exchangedAt);
+
         case _FriendSort.birthday:
           final aMonth = a.profile.birthMonth;
           final aDay = a.profile.birthDay;

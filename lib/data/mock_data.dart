@@ -8,6 +8,7 @@ class Profile {
     required this.nickname,
     this.fullName,
     this.nameRomaji,
+    this.nameKana,
     this.birthMonth,
     this.birthDay,
     this.likes,
@@ -21,6 +22,7 @@ class Profile {
   final String nickname;
   final String? fullName;
   final String? nameRomaji;
+  final String? nameKana;
   final int? birthMonth;
   final int? birthDay;
   final List<String>? likes;
@@ -101,6 +103,7 @@ const _hana = Profile(
   nickname: 'はな',
   fullName: '佐藤 はな',
   nameRomaji: 'HANA SATO',
+  nameKana: 'さとう はな',
   birthMonth: 7,
   birthDay: 7,
   likes: ['喫茶店', 'クリームソーダ', '本屋'],
@@ -126,12 +129,14 @@ Friend _friend(
   bool isNew = false,
   int? birthMonth,
   int? birthDay,
+  required String nameKana,
 }) => Friend(
   profile: Profile(
     id: id,
     publicId: _dummyPublicId(id),
     nickname: fullName.split(' ').last,
     fullName: fullName,
+    nameKana: nameKana,
     birthMonth: birthMonth,
     birthDay: birthDay,
     likes: [like],
@@ -160,6 +165,7 @@ final _initialFriends = [
     isNew: true,
     birthMonth: 3,
     birthDay: 15,
+    nameKana: 'たかはし そうた',
   ),
   _friend(
     'yui',
@@ -170,6 +176,7 @@ final _initialFriends = [
     avatar: 'assets/avatars/yui.png',
     birthMonth: 7,
     birthDay: 20,
+    nameKana: 'たなか ゆい',
   ),
   _friend(
     'ren',
@@ -180,15 +187,48 @@ final _initialFriends = [
     avatar: 'assets/avatars/ren.png',
     birthMonth: 12,
     birthDay: 25,
+    nameKana: 'いとう れん',
   ),
-  _friend('aoi', '山本 あおい', '映画', '週末は映画館にいます。', 4, favorite: true),
-  _friend('kaito', '中村 かいと', 'サッカー', '朝ランはじめました。', 5, favorite: true),
-  _friend('mei', '小川 めい', 'ねこ', 'うちのねこ、見てほしい。', 6, favorite: true),
-  _friend('riku', '加藤 りく', 'ギター', 'いつかライブがしたい。', 7, favorite: true),
-  _friend('saki', '吉田 さき', '旅行', '次は京都に行きたい。', 8),
-  _friend('yuto', '松本 ゆうと', 'ラーメン', 'おすすめのお店、募集中。', 9),
-  _friend('nana', '井上 なな', 'お花', 'ベランダで育てています。', 10),
-  _friend('haru', '木村 はる', 'ゲーム', '一緒にあそぼう！', 11),
+  _friend(
+    'aoi',
+    '山本 あおい',
+    '映画',
+    '週末は映画館にいます。',
+    4,
+    favorite: true,
+    nameKana: 'やまもと あおい',
+  ),
+  _friend(
+    'kaito',
+    '中村 かいと',
+    'サッカー',
+    '朝ランはじめました。',
+    5,
+    favorite: true,
+    nameKana: 'なかむら かいと',
+  ),
+  _friend(
+    'mei',
+    '小川 めい',
+    'ねこ',
+    'うちのねこ、見てほしい。',
+    6,
+    favorite: true,
+    nameKana: 'おがわ めい',
+  ),
+  _friend(
+    'riku',
+    '加藤 りく',
+    'ギター',
+    'いつかライブがしたい。',
+    7,
+    favorite: true,
+    nameKana: 'かとう りく',
+  ),
+  _friend('saki', '吉田 さき', '旅行', '次は京都に行きたい。', 8, nameKana: 'よしだ さき'),
+  _friend('yuto', '松本 ゆうと', 'ラーメン', 'おすすめのお店、募集中。', 9, nameKana: 'まつもと ゆうと'),
+  _friend('nana', '井上 なな', 'お花', 'ベランダで育てています。', 10, nameKana: 'いのうえ なな'),
+  _friend('haru', '木村 はる', 'ゲーム', '一緒にあそぼう！', 11, nameKana: 'きむら はる'),
 ];
 
 class FriendsNotifier extends Notifier<List<Friend>> {
