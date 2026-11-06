@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
 import '../widgets/common.dart';
+
+final supabase = Supabase.instance.client;
 
 //ログイン画面
 //stateで情報を保持
@@ -21,6 +25,7 @@ class _LoginScreen extends State<LoginScreen> {
 
   String email = '';
   String password = '';
+  bool sucsess = true; //ログイン認証成功(true)or失敗(false)
 
   @override
   void dispose() {
@@ -64,20 +69,42 @@ class _LoginScreen extends State<LoginScreen> {
             label: 'ログインする',
             //ここで，入力情報をバックエンドの「ログイン処理を行うAPI」をたたくと同時に渡したい
 
-            //1.入力されたメールアドレスとパスワードを取得
-            //2.バックエンドの認証APIをたたく
-            //3.認証が成功したら画面遷移
-            //4.認証失敗ならエラー表示
-            onPressed: () {
+            onPressed: () async {
+              //1.入力されたメールアドレスとパスワードを取得
               setState(() {
                 email = emailController.text;
                 password = passwordController.text;
               });
-
-              //context.go('/friends'); //画面遷移(目的のページに直接ジャンプ，戻れない)
+              //2.バックエンドの認証APIをたたく
+              try {
+                // ② Supabaseでログイン認証
+                final res = await Supabase.instance.client.auth
+                    .signInWithPassword(email: email, password: password);
+                // 非同期処理中に画面が破棄された場合の対策
+                if (!mounted) return;
+                //認証成功
+                if (res.user != null) {
+                  setState(() {
+                    sucsess = true;
+                  });
+                  if (!context.mounted) return;
+                  context.go('/friends');
+                }
+              } on AuthException catch (e) {
+                //Supabaseで認証失敗
+                if (!mounted) return;
+                setState(() {
+                  sucsess = false;
+                });
+                debugPrint('ログインエラー: ${e.message}');
+              } catch (e) {
+                // その他の予期しないエラー
+                if (!mounted) return;
+                debugPrint('予期しないエラー: $e');
+              }
             },
           ),
-          Text('email: $email , password: $password'),
+          //Text('email: $email , password: $password'),//デバック用
         ],
       ),
       below: [
@@ -109,7 +136,7 @@ class _LoginScreen extends State<LoginScreen> {
           style: TextStyle(fontSize: 10, color: AppColors.subText),
         ),
         const SizedBox(height: 18),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.lock_outline, size: 13, color: AppColors.subText),
@@ -118,6 +145,7 @@ class _LoginScreen extends State<LoginScreen> {
               'メールアドレスは友だちに公開されません',
               style: TextStyle(fontSize: 10, color: AppColors.subText),
             ),
+            if (!sucsess) Text('メールアドレスまたはパスワードが間違っています'),
           ],
         ),
       ],
@@ -204,9 +232,9 @@ class _SignupScreen extends State<SignupScreen> {
               //context.go('/friends');//画面遷移
             },
           ),
-          Text(
-            'name: $name, furigana: $furigana, email: $email, password: $password',
-          ),
+          // Text(
+          //   'name: $name, furigana: $furigana, email: $email, password: $password',
+          // ),//デバック用
           const SizedBox(height: 12),
           const Text(
             '登録後、メールアドレスの確認に進みます。',
