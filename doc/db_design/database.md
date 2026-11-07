@@ -40,6 +40,7 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | `full_name` | text | 可 | 名前 |
 | `name_romaji` | text | 可 | ローマ字表記の名前 |
 | `name_kana` | text | 可 | 名前のふりがな。ともだち一覧の名前順に使う |
+| `birth_year` | smallint | 可 | 誕生年。任意。入力するときは月日も必要 |
 | `birth_month` | smallint | 可 | 誕生月。誕生日は月と日の両方を入力するか、両方を未入力にする |
 | `birth_day` | smallint | 可 | 誕生日の日 |
 | `likes` | text[] | 可 | 好きなもの。最大5件。自由入力 |
@@ -103,6 +104,7 @@ create table public.profiles (
   full_name   text,
   name_romaji text,
   name_kana   text,
+  birth_year  smallint check (birth_year between 1900 and 2100),
   birth_month smallint check (birth_month between 1 and 12),
   birth_day   smallint check (birth_day between 1 and 31),
   likes       text[] check (cardinality(likes) <= 5),
@@ -111,7 +113,8 @@ create table public.profiles (
   avatar_path text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
-  check ((birth_month is null) = (birth_day is null))
+  check ((birth_month is null) = (birth_day is null)),
+  check (birth_year is null or birth_month is not null)
 );
 
 create table public.exchange_codes (
@@ -334,7 +337,7 @@ with check (owner_id = (select auth.uid()));
 
 revoke update on public.profiles from anon, authenticated;
 grant update (
-  nickname, full_name, name_romaji, name_kana, birth_month, birth_day,
+  nickname, full_name, name_romaji, name_kana, birth_year, birth_month, birth_day,
   likes, hobby, message, avatar_path
 ) on public.profiles to authenticated;
 

@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/exchange.dart';
+import '../data/friends.dart';
 import '../data/mock_data.dart';
+import '../data/my_profile.dart';
 import '../widgets/common.dart';
 
 /// 友だち一覧の並び替えの方法
@@ -19,6 +21,43 @@ enum _FriendSort {
   birthday,
 
   ///誕生日順
+}
+
+const _saveErrorMessage = '保存に失敗しました。もう一度お試しください。';
+
+/// お気に入りを切り替え、保存に失敗したら知らせる。
+Future<void> _toggleFavorite(
+  BuildContext context,
+  WidgetRef ref,
+  String friendId,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await ref.read(friendsProvider.notifier).toggleFavorite(friendId);
+  } catch (_) {
+    messenger.showSnackBar(const SnackBar(content: Text(_saveErrorMessage)));
+  }
+}
+
+/// 一覧を読み込めなかったときの表示。
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 40),
+    child: Column(
+      children: [
+        const Text(
+          'ともだちの帳を読み込めませんでした',
+          style: TextStyle(fontSize: 12, color: AppColors.subText),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('もう一度読み込む')),
+      ],
+    ),
+  );
 }
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -138,8 +177,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final friends = ref.watch(friendsProvider);
-    final nickname = ref.watch(myProfileProvider).nickname;
+    final friendsState = ref.watch(friendsProvider);
+    final friends = friendsState.value ?? const <Friend>[];
+    final nickname = ref.watch(myProfileProvider).value?.nickname;
     final favorites = friends.where((f) => f.isFavorite).length;
     final visible = friends.where(_matches).toList();
     _sortFriends(visible);
@@ -175,7 +215,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             const SizedBox(height: 4),
             HeroBanner(
-              eyebrow: '$nicknameさん、おかえりなさい',
+              eyebrow: nickname == null ? 'おかえりなさい' : '$nicknameさん、おかえりなさい',
               eyebrowIsSerif: false,
               title: '「すき」で、\nもっとなかよく。',
               caption: '友だちのこと、またひとつ知ろう。',
@@ -266,7 +306,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            if (visible.isEmpty)
+            if (!friendsState.hasValue && friendsState.hasError)
+              _LoadError(onRetry: () => ref.invalidate(friendsProvider))
+            else if (!friendsState.hasValue)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (visible.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Text(
@@ -357,9 +404,7 @@ class _FriendCard extends ConsumerWidget {
               child: friend.isNew
                   ? Text('new!', style: serifItalic(size: 12))
                   : GestureDetector(
-                      onTap: () => ref
-                          .read(friendsProvider.notifier)
-                          .toggleFavorite(profile.id),
+                      onTap: () => _toggleFavorite(context, ref, profile.id),
                       child: Icon(
                         friend.isFavorite
                             ? Icons.bookmark
@@ -417,21 +462,28 @@ class FriendDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
-  late final TextEditingController _memo;
+  final _memo = TextEditingController();
+  bool _opened = false;
 
-  Friend? _find(List<Friend> friends) => friends
-      .where((friend) => friend.profile.id == widget.friendId)
+  Friend? _find(List<Friend>? friends) => friends
+      ?.where((friend) => friend.profile.id == widget.friendId)
       .firstOrNull;
 
   @override
   void initState() {
     super.initState();
-    _memo = TextEditingController(text: _find(ref.read(friendsProvider))?.memo);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(friendsProvider.notifier).markViewed(widget.friendId);
-      }
-    });
+    // 一覧の読み込みが終わってから開いた場合も、最初に表示した時点で1回だけ行う。
+    ref.listenManual(friendsProvider, (_, next) {
+      final friend = _find(next.value);
+      if (friend == null || _opened) return;
+      _opened = true;
+      _memo.text = friend.memo ?? '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(friendsProvider.notifier).markViewed(widget.friendId);
+        }
+      });
+    }, fireImmediately: true);
   }
 
   @override
@@ -470,15 +522,32 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final friends = ref.read(friendsProvider.notifier);
     _close();
-    ref.read(friendsProvider.notifier).remove(widget.friendId);
+    try {
+      await friends.remove(widget.friendId);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('友だちを解除できませんでした。もう一度お試しください。')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final friend = _find(ref.watch(friendsProvider));
+    final friendsState = ref.watch(friendsProvider);
+    final friend = _find(friendsState.value);
     if (friend == null) {
-      return const Scaffold(body: SizedBox.shrink());
+      return Scaffold(
+        body: switch (friendsState) {
+          _ when friendsState.hasValue => const SizedBox.shrink(),
+          AsyncError() => SafeArea(
+            child: _LoadError(onRetry: () => ref.invalidate(friendsProvider)),
+          ),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
+      );
     }
     final date = friend.exchangedAt;
     return Scaffold(
@@ -511,9 +580,7 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
                 shape: const CircleBorder(),
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onTap: () => ref
-                      .read(friendsProvider.notifier)
-                      .toggleFavorite(friend.profile.id),
+                  onTap: () => _toggleFavorite(context, ref, friend.profile.id),
                   child: SizedBox.square(
                     dimension: 30,
                     child: Icon(
