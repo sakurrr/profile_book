@@ -743,12 +743,6 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
         .firstOrNull;
     return _ExchangePage(
       title: '交換リクエスト',
-<<<<<<< HEAD
-      onBack: () => context.go('/friends'),
-      children: request == null
-          ? const [_Notice('このリクエストは、もう届いていません。')]
-          : _content(context, ref, request.requester),
-=======
       children: switch (requests) {
         _ when request != null => _content(request.requester),
         AsyncData() => const [_Notice('このリクエストは、もう届いていません。')],
@@ -757,7 +751,6 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
         ),
         _ => const [_Loading()],
       },
->>>>>>> origin/main
     );
   }
 
