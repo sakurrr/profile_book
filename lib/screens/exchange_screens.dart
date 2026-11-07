@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../app/theme.dart';
+import '../data/exchange.dart';
 import '../data/mock_data.dart';
 import '../widgets/common.dart';
 
@@ -59,9 +61,12 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
     // コードを見せている間に申請が届いたら、その場で交換リクエストを開く。
     final active = TickerMode.valuesOf(context).enabled;
     ref.listen(incomingRequestsProvider, (previous, next) {
-      if (_reading || !active) return;
-      final known = {for (final r in previous ?? const []) r.id};
-      final arrived = next.where((r) => !known.contains(r.id)).firstOrNull;
+      // 最初の読み込みで取れた申請は、届いたばかりとは扱わない。
+      final before = previous?.value;
+      final after = next.value;
+      if (_reading || !active || before == null || after == null) return;
+      final known = {for (final r in before) r.id};
+      final arrived = after.where((r) => !known.contains(r.id)).firstOrNull;
       if (arrived != null) context.push('/exchange/requests/${arrived.id}');
     });
 
@@ -168,14 +173,18 @@ class _ShowCodeView extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    ref.read(exchangeTokenProvider.notifier).rotate();
-    _showMessage(context, 'QRを再発行しました');
+    try {
+      await ref.read(myExchangeTokenProvider.notifier).rotate();
+      if (context.mounted) _showMessage(context, 'QRを再発行しました');
+    } catch (error) {
+      if (context.mounted) _showMessage(context, exchangeErrorMessage(error));
+    }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(myProfileProvider);
-    final token = ref.watch(exchangeTokenProvider);
+    final token = ref.watch(myExchangeTokenProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -237,18 +246,33 @@ class _ShowCodeView extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    QrImageView(
-                      data: exchangeQrData(token),
-                      size: 180,
-                      padding: EdgeInsets.zero,
-                      eyeStyle: const QrEyeStyle(
-                        eyeShape: QrEyeShape.square,
-                        color: AppColors.ink,
-                      ),
-                      dataModuleStyle: const QrDataModuleStyle(
-                        dataModuleShape: QrDataModuleShape.square,
-                        color: AppColors.ink,
-                      ),
+                    SizedBox.square(
+                      dimension: 180,
+                      child: switch (token) {
+                        AsyncData(:final value) => QrImageView(
+                          data: exchangeQrData(value),
+                          padding: EdgeInsets.zero,
+                          eyeStyle: const QrEyeStyle(
+                            eyeShape: QrEyeShape.square,
+                            color: AppColors.ink,
+                          ),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        AsyncError() => Center(
+                          child: TextButton(
+                            onPressed: () =>
+                                ref.invalidate(myExchangeTokenProvider),
+                            child: const Text(
+                              'QRを表示できませんでした\n再読み込み',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        _ => const Center(child: CircularProgressIndicator()),
+                      },
                     ),
                     const SizedBox(height: 16),
                     const Row(
@@ -313,9 +337,16 @@ class _ShowCodeView extends ConsumerWidget {
         if (kDebugMode) ...[
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () =>
-                ref.read(incomingRequestsProvider.notifier).simulateArrival(),
-            child: const Text('申請が届いたことにする（開発用）'),
+            // シミュレーターはカメラを使えないので、コードを文字で渡して試す。
+            onPressed: token.value == null
+                ? null
+                : () {
+                    Clipboard.setData(
+                      ClipboardData(text: exchangeQrData(token.value!)),
+                    );
+                    _showMessage(context, 'コードをコピーしました（開発用）');
+                  },
+            child: const Text('コードをコピーする（開発用）'),
           ),
         ],
       ],
@@ -390,12 +421,12 @@ class _ReadCodeViewState extends State<_ReadCodeView> {
         if (kDebugMode) ...[
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () => _openConfirm(demoStrangerToken),
-            child: const Text('サンプルのコードで試す（開発用）'),
-          ),
-          TextButton(
-            onPressed: () => _openConfirm(demoFriendToken),
-            child: const Text('交換済みの相手のコードで試す（開発用）'),
+            // シミュレーターはカメラを使えないので、コピーしたコードで試す。
+            onPressed: () async {
+              final data = await Clipboard.getData(Clipboard.kTextPlain);
+              _openConfirm(parseExchangeToken(data?.text) ?? '');
+            },
+            child: const Text('コピーしたコードで試す（開発用）'),
           ),
         ],
       ],
@@ -403,83 +434,109 @@ class _ReadCodeViewState extends State<_ReadCodeView> {
   }
 }
 
-class ExchangeConfirmScreen extends ConsumerWidget {
+/// RPCを呼ぶ間はボタンを押せなくし、失敗したら理由を表示する。
+mixin _RpcRunner<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  bool busy = false;
+
+  Future<void> run(Future<void> Function() action) async {
+    setState(() => busy = true);
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(context, exchangeErrorMessage(error));
+      onRpcError();
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  /// 失敗したときに、画面のデータを最新にする。
+  void onRpcError() {}
+}
+
+class ExchangeConfirmScreen extends ConsumerStatefulWidget {
   const ExchangeConfirmScreen({super.key, required this.token});
 
   final String? token;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final preview = ref.watch(exchangePreviewProvider(token));
+  ConsumerState<ExchangeConfirmScreen> createState() =>
+      _ExchangeConfirmScreenState();
+}
+
+class _ExchangeConfirmScreenState extends ConsumerState<ExchangeConfirmScreen>
+    with _RpcRunner {
+  @override
+  void onRpcError() => ref.invalidate(exchangePreviewProvider(widget.token));
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = ref.watch(exchangePreviewProvider(widget.token));
     return _ExchangePage(
       title: 'プロフィール帳の追加',
       children: switch (preview) {
-        null => const [_Notice('このコードは使えません。\n相手に新しいコードを見せてもらってください。')],
-        ExchangePreview(:final party, relation: ExchangeRelation.none) =>
-          _content(context, ref, party),
-        ExchangePreview(:final party, :final relation) => _status(
-          context,
-          ref,
-          party,
-          relation,
+        AsyncData(value: null) => const [
+          _Notice('このコードは使えません。\n相手に新しいコードを見せてもらってください。'),
+        ],
+        AsyncData(:final value?) when value.relation == ExchangeRelation.none =>
+          _content(value.party),
+        AsyncData(:final value?) => _status(value),
+        AsyncError() => _loadError(
+          () => ref.invalidate(exchangePreviewProvider(widget.token)),
         ),
+        _ => const [_Loading()],
       },
     );
   }
 
   /// 申請できない相手のときに、理由と次の操作を表示する。
-  List<Widget> _status(
-    BuildContext context,
-    WidgetRef ref,
-    ExchangeParty party,
-    ExchangeRelation relation,
-  ) => switch (relation) {
-    ExchangeRelation.self => const [
-      _Notice('これはあなたのQRコードです。\n交換したい相手に読み取ってもらってね。'),
-    ],
-    ExchangeRelation.friend => [
-      _Notice('${party.nickname}さんとは、もう交換しています。'),
-      PrimaryButton(
-        label: 'プロフィール帳を見る',
-        icon: Icons.menu_book_outlined,
-        onPressed: () {
-          _closePage(context);
-          context.go('/friends/${party.id}');
-        },
-      ),
-    ],
-    ExchangeRelation.pendingOutgoing => [
-      _Notice('${party.nickname}さんの承認を待っています。'),
-      SecondaryButton(
-        label: '申請を取り消す',
-        onPressed: () {
-          ref.read(outgoingRequestsProvider.notifier).cancel(party.id);
-          _showMessage(context, '申請を取り消しました');
-          _closePage(context);
-        },
-      ),
-    ],
-    ExchangeRelation.pendingIncoming => [
-      _Notice('${party.nickname}さんから、交換リクエストが届いています。'),
-      PrimaryButton(
-        label: 'リクエストを確認する',
-        icon: Icons.mail_outline,
-        onPressed: () {
-          final request = ref
-              .read(incomingRequestsProvider)
-              .firstWhere((r) => r.requester.id == party.id);
-          context.pushReplacement('/exchange/requests/${request.id}');
-        },
-      ),
-    ],
-    ExchangeRelation.none => const [],
-  };
+  List<Widget> _status(ExchangePreview preview) {
+    final party = preview.party;
+    return switch (preview.relation) {
+      ExchangeRelation.self => const [
+        _Notice('これはあなたのQRコードです。\n交換したい相手に読み取ってもらってね。'),
+      ],
+      ExchangeRelation.friend => [
+        _Notice('${party.nickname}さんとは、もう交換しています。'),
+        PrimaryButton(
+          label: 'プロフィール帳を見る',
+          icon: Icons.menu_book_outlined,
+          onPressed: () {
+            _closePage(context);
+            context.go('/friends/${party.id}');
+          },
+        ),
+      ],
+      ExchangeRelation.pendingOutgoing => [
+        _Notice('${party.nickname}さんの承認を待っています。'),
+        SecondaryButton(
+          label: '申請を取り消す',
+          onPressed: busy
+              ? null
+              : () => run(() async {
+                  await cancelExchange(preview.requestId!);
+                  if (!mounted) return;
+                  _showMessage(context, '申請を取り消しました');
+                  _closePage(context);
+                }),
+        ),
+      ],
+      ExchangeRelation.pendingIncoming => [
+        _Notice('${party.nickname}さんから、交換リクエストが届いています。'),
+        PrimaryButton(
+          label: 'リクエストを確認する',
+          icon: Icons.mail_outline,
+          onPressed: () => context.pushReplacement(
+            '/exchange/requests/${preview.requestId}',
+          ),
+        ),
+      ],
+      ExchangeRelation.none => const [],
+    };
+  }
 
-  List<Widget> _content(
-    BuildContext context,
-    WidgetRef ref,
-    ExchangeParty party,
-  ) => [
+  List<Widget> _content(ExchangeParty party) => [
     const _StatusLine(icon: Icons.check_circle_outline, label: 'QRコードを読み取りました'),
     const SizedBox(height: 4),
     _Title('${party.nickname}さんと交換する？'),
@@ -496,13 +553,21 @@ class ExchangeConfirmScreen extends ConsumerWidget {
     PrimaryButton(
       label: '交換を申請する',
       icon: Icons.note_add_outlined,
-      onPressed: () {
-        ref.read(outgoingRequestsProvider.notifier).request(party);
-        _showMessage(context, '申請を送りました。${party.nickname}さんの承認を待っています。');
-        // 交換タブに戻ったときに確認画面が残らないよう、閉じてから移動する。
-        _closePage(context);
-        context.go('/friends');
-      },
+      onPressed: busy
+          ? null
+          : () => run(() async {
+              final accepted = await requestExchange(widget.token!);
+              if (!mounted) return;
+              _showMessage(
+                context,
+                accepted
+                    ? '${party.nickname}さんとプロフィール帳を交換しました'
+                    : '申請を送りました。${party.nickname}さんの承認を待っています。',
+              );
+              // 交換タブに戻ったときに確認画面が残らないよう、閉じてから移動する。
+              _closePage(context);
+              context.go('/friends');
+            }),
     ),
     const SizedBox(height: 8),
     SecondaryButton(label: 'キャンセル', onPressed: () => _closePage(context)),
@@ -511,32 +576,203 @@ class ExchangeConfirmScreen extends ConsumerWidget {
   ];
 }
 
+/// 届いた交換リクエストの一覧。ホームのベルから開く。
+class ExchangeRequestListScreen extends ConsumerWidget {
+  const ExchangeRequestListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requests = ref.watch(incomingRequestsProvider);
+    return _ExchangePage(
+      title: '交換リクエスト',
+      children: switch (requests) {
+        AsyncData(value: []) => const [_NoRequests()],
+        AsyncData(:final value) => [
+          const SizedBox(height: 4),
+          Text("You've got requests!", style: serifItalic(size: 12)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Text(
+                '届いたリクエスト',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${value.length}',
+                style: serif(size: 16, color: AppColors.accent),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '相手を確認して、交換するか決めてね。',
+            style: TextStyle(fontSize: 11, color: AppColors.subText),
+          ),
+          const SizedBox(height: 14),
+          for (final request in value) ...[
+            _RequestTile(
+              request: request,
+              onTap: () => context.push('/friends/requests/${request.id}'),
+            ),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 6),
+          const _Footnote('承認するまで、あなたのプロフィール帳は相手に見えません'),
+        ],
+        AsyncError() => _loadError(
+          () => ref.invalidate(incomingRequestsProvider),
+        ),
+        _ => const [_Loading()],
+      },
+    );
+  }
+}
+
+class _RequestTile extends StatelessWidget {
+  const _RequestTile({required this.request, required this.onTap});
+
+  final ExchangeRequest request;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: PaperCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      radius: 16,
+      child: Row(
+        children: [
+          const _LockedAvatar(size: 48),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${request.requester.nickname}さん',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  request.requester.publicIdLabel,
+                  style: serif(size: 10, color: AppColors.subText),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            _timeAgo(request.createdAt),
+            style: const TextStyle(fontSize: 10, color: AppColors.hint),
+          ),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right, size: 20, color: AppColors.subText),
+        ],
+      ),
+    ),
+  );
+}
+
+String _timeAgo(DateTime time) {
+  final elapsed = DateTime.now().difference(time);
+  if (elapsed.inMinutes < 1) return 'たった今';
+  if (elapsed.inHours < 1) return '${elapsed.inMinutes}分前';
+  if (elapsed.inDays < 1) return '${elapsed.inHours}時間前';
+  if (elapsed.inDays < 7) return '${elapsed.inDays}日前';
+  return '${time.month}月${time.day}日';
+}
+
+class _NoRequests extends StatelessWidget {
+  const _NoRequests();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 60),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: Flower(size: 48)),
+        const SizedBox(height: 16),
+        const Text(
+          'まだ交換リクエストは届いていません',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'QRコードを見せて、友だちに読み取ってもらおう。',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, color: AppColors.subText),
+        ),
+        const SizedBox(height: 24),
+        PrimaryButton(
+          label: 'QRコードを見せる',
+          icon: Icons.qr_code_2,
+          onPressed: () => context.go('/exchange'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// 自分宛ての申請を確認し、承認するか断る画面。
-class ExchangeRequestScreen extends ConsumerWidget {
+class ExchangeRequestScreen extends ConsumerStatefulWidget {
   const ExchangeRequestScreen({super.key, required this.requestId});
 
   final String requestId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final request = ref
-        .watch(incomingRequestsProvider)
-        .where((r) => r.id == requestId)
+  ConsumerState<ExchangeRequestScreen> createState() =>
+      _ExchangeRequestScreenState();
+}
+
+class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
+    with _RpcRunner {
+  @override
+  Widget build(BuildContext context) {
+    final requests = ref.watch(incomingRequestsProvider);
+    final request = requests.value
+        ?.where((r) => r.id == widget.requestId)
         .firstOrNull;
     return _ExchangePage(
       title: '交換リクエスト',
+<<<<<<< HEAD
       onBack: () => context.go('/friends'),
       children: request == null
           ? const [_Notice('このリクエストは、もう届いていません。')]
           : _content(context, ref, request.requester),
+=======
+      children: switch (requests) {
+        _ when request != null => _content(request.requester),
+        AsyncData() => const [_Notice('このリクエストは、もう届いていません。')],
+        AsyncError() => _loadError(
+          () => ref.invalidate(incomingRequestsProvider),
+        ),
+        _ => const [_Loading()],
+      },
+>>>>>>> origin/main
     );
   }
 
-  List<Widget> _content(
-    BuildContext context,
-    WidgetRef ref,
-    ExchangeParty party,
-  ) => [
+  /// 承認しても断っても元の画面に戻る。一覧から開いた場合は、残りの申請を続けて見られる。
+  Future<void> _respond(ExchangeParty party, {required bool accept}) =>
+      run(() async {
+        await ref
+            .read(incomingRequestsProvider.notifier)
+            .respond(widget.requestId, accept: accept);
+        if (!mounted) return;
+        _showMessage(
+          context,
+          accept ? '${party.nickname}さんとプロフィール帳を交換しました' : 'リクエストを断りました',
+        );
+        _closePage(context);
+      });
+
+  List<Widget> _content(ExchangeParty party) => [
     const _StatusLine(icon: Icons.mail_outline, label: '交換リクエストが届きました'),
     const SizedBox(height: 4),
     _Title('${party.nickname}さんと交換する？'),
@@ -553,29 +789,31 @@ class ExchangeRequestScreen extends ConsumerWidget {
     PrimaryButton(
       label: '承認してプロフィール帳を交換',
       icon: Icons.note_add_outlined,
-      onPressed: () {
-        ref
-            .read(incomingRequestsProvider.notifier)
-            .respond(requestId, accept: true);
-        _showMessage(context, '${party.nickname}さんとプロフィール帳を交換しました');
-        _closePage(context);
-        context.go('/friends');
-      },
+      onPressed: busy ? null : () => _respond(party, accept: true),
     ),
     const SizedBox(height: 8),
     SecondaryButton(
       label: '今回は断る',
-      onPressed: () {
-        ref
-            .read(incomingRequestsProvider.notifier)
-            .respond(requestId, accept: false);
-        _showMessage(context, 'リクエストを断りました');
-        _closePage(context);
-      },
+      onPressed: busy ? null : () => _respond(party, accept: false),
     ),
     const SizedBox(height: 10),
     const _Footnote('承認するまで、プロフィール帳は共有されません'),
   ];
+}
+
+List<Widget> _loadError(VoidCallback onRetry) => [
+  const _Notice('読み込めませんでした。\n通信状況を確認してください。'),
+  SecondaryButton(label: 'もう一度読み込む', onPressed: onRetry),
+];
+
+class _Loading extends StatelessWidget {
+  const _Loading();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 80),
+    child: Center(child: CircularProgressIndicator()),
+  );
 }
 
 /// 確認画面と交換リクエストで共通の、ヘッダー付きの縦スクロール画面。
@@ -602,6 +840,24 @@ class _ExchangePage extends StatelessWidget {
         ],
       ),
     ),
+  );
+}
+
+/// 交換前の相手のアバターの代わり。顔は交換するまで見せない。
+class _LockedAvatar extends StatelessWidget {
+  const _LockedAvatar({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: const BoxDecoration(
+      color: AppColors.ring,
+      shape: BoxShape.circle,
+    ),
+    child: Icon(Icons.lock_outline, size: size * 0.3, color: AppColors.subText),
   );
 }
 
@@ -659,19 +915,7 @@ class _LockedProfileCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: const BoxDecoration(
-                          color: AppColors.ring,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.lock_outline,
-                          size: 22,
-                          color: AppColors.subText,
-                        ),
-                      ),
+                      const _LockedAvatar(size: 72),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(

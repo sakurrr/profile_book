@@ -21,6 +21,19 @@ final appRouter = GoRouter(
               path: '/friends',
               builder: (_, _) => const HomeScreen(),
               routes: [
+                // ベルから開く。`:id` より先に置き、友だちのIDと区別する。
+                GoRoute(
+                  path: 'requests',
+                  builder: (_, _) => const ExchangeRequestListScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) => ExchangeRequestScreen(
+                        requestId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ],
+                ),
                 GoRoute(
                   path: ':id',
                   builder: (_, state) => FriendDetailScreen(
