@@ -761,7 +761,7 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
             .read(incomingRequestsProvider.notifier)
             .respond(widget.requestId, accept: accept);
         if (!mounted) return;
-        // 承認したら、ともだちの帳に新しい友だちを取り込む。
+        // 承認したら、ともだちのプロフィールに新しい友だちを取り込む。
         if (accept) ref.invalidate(friendsProvider);
         _showMessage(
           context,

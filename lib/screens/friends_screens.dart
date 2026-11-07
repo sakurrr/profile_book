@@ -51,7 +51,7 @@ class _LoadError extends StatelessWidget {
     child: Column(
       children: [
         const Text(
-          'ともだちの帳を読み込めませんでした',
+          'ともだちのプロフィールを読み込めませんでした',
           style: TextStyle(fontSize: 12, color: AppColors.subText),
         ),
         TextButton(onPressed: onRetry, child: const Text('もう一度読み込む')),
@@ -236,7 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Row(
               children: [
                 const Text(
-                  'ともだちの帳',
+                  'ともだちのプロフィール',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(width: 8),
@@ -506,7 +506,7 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
       builder: (context) => AlertDialog(
         title: const Text('友だちを解除しますか？', style: TextStyle(fontSize: 16)),
         content: Text(
-          '${friend.profile.nickname}さんの帳からも、あなたのプロフィール帳が消えます。メモも削除されます。',
+          '${friend.profile.nickname}さんのプロフィールからも、あなたのプロフィール帳が消えます。メモも削除されます。',
           style: const TextStyle(fontSize: 13),
         ),
         actions: [
