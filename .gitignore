@@ -48,3 +48,5 @@ app.*.map.json
 .widget_preview/
 
 env.json
+# 交換の相手役スクリプトのログイン情報
+tool/.partner_session.json

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
+import '../data/exchange.dart';
 import '../data/mock_data.dart';
 import '../widgets/common.dart';
 
@@ -142,7 +143,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final favorites = friends.where((f) => f.isFavorite).length;
     final visible = friends.where(_matches).toList();
     _sortFriends(visible);
-    final incoming = ref.watch(incomingRequestsProvider);
+    final incoming = ref.watch(incomingRequestsProvider).value ?? const [];
 
     return Scaffold(
       body: SafeArea(
@@ -160,14 +161,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     backgroundColor: AppColors.accent,
                     child: CircleIconButton(
                       icon: Icons.notifications_none,
-                      // 届いた申請の一覧ができるまでは、古い申請から1件ずつ開く。
-                      onPressed: () => incoming.isEmpty
-                          ? ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('交換リクエストは届いていません')),
-                            )
-                          : context.go(
-                              '/exchange/requests/${incoming.first.id}',
-                            ),
+                      onPressed: () => context.push('/friends/requests'),
                     ),
                   ),
                   const SizedBox(width: 8),

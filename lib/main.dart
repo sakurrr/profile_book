@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'data/exchange.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,12 +24,26 @@ Future<void> main() async {
   debugPrint('③ runApp実行完了');
 }
 
-class App extends StatelessWidget {
+final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+class App extends ConsumerWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // どの画面にいても、自分が送った申請で交換が成立したら知らせる。
+    ref.listen(acceptedExchangesProvider, (_, next) {
+      final nickname = next.value;
+      if (nickname == null) return;
+      _messengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('$nicknameさんとプロフィール帳を交換しました')),
+        );
+    });
+
     return MaterialApp.router(
+      scaffoldMessengerKey: _messengerKey,
       title: 'prome',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
