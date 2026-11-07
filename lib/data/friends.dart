@@ -18,19 +18,57 @@ class FriendsNotifier extends AsyncNotifier<List<Friend>> {
   final _memoTimers = <String, Timer>{};
 
   @override
+  @override
   Future<List<Friend>> build() async {
+    // ① ログイン中のユーザーIDを取得
     final userId = await ref.watch(currentUserIdProvider.future);
-    if (userId == null) throw StateError('ログインしていません');
+
+    if (userId == null) {
+      throw StateError('ログインしていません');
+    }
+
     _userId = userId;
-    // 自分が送った申請で交換が成立したら、新しい友だちを取り込む。
+
+    // ② 友達交換が成立したら一覧を再取得
     ref.listen(acceptedExchangesProvider, (_, _) => ref.invalidateSelf());
 
-    // `friendships` から `profiles` への外部キーが2本あるので、相手の方を指定する。
+    // ③ Supabase Realtimeで自分の友達関係を監視
+    final channel = _client
+        .channel('friendships-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'friendships',
+
+          // 自分のレコードに限定
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'owner_id',
+            value: userId,
+          ),
+
+          callback: (payload) {
+            if (!ref.mounted) return;
+
+            // DBが変更されたら友達一覧を再取得
+            ref.invalidateSelf();
+          },
+        )
+        .subscribe();
+
+    // ④ Providerの破棄・再構築時に購読を解除
+    ref.onDispose(() {
+      unawaited(_client.removeChannel(channel));
+    });
+
+    // ⑤ Supabaseから友達一覧を取得
     final rows = await _client
         .from('friendships')
         .select('*, friend:profiles!friendships_friend_id_fkey(*)')
         .eq('owner_id', userId)
         .order('exchanged_at', ascending: false);
+
+    // ⑥ 取得したデータをFriendオブジェクトに変換
     return [for (final row in rows) Friend.fromJson(row)];
   }
 
