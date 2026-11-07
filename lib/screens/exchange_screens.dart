@@ -8,7 +8,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/exchange.dart';
-import '../data/mock_data.dart';
+import '../data/friends.dart';
+import '../data/my_profile.dart';
 import '../widgets/common.dart';
 
 void _showMessage(BuildContext context, String message) {
@@ -183,7 +184,7 @@ class _ShowCodeView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(myProfileProvider);
+    final profile = ref.watch(myProfileProvider).value;
     final token = ref.watch(myExchangeTokenProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,36 +216,37 @@ class _ShowCodeView extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                 child: Column(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Avatar(profile: profile, size: 36, ringWidth: 3),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              profile.displayName,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
+                    if (profile != null)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Avatar(profile: profile, size: 36, ringWidth: 3),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profile.displayName,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                            const Text(
-                              'わたしのプロフィール帳',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: AppColors.subText,
+                              const Text(
+                                'わたしのプロフィール帳',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: AppColors.subText,
+                                ),
                               ),
-                            ),
-                            Text(
-                              profile.publicIdLabel,
-                              style: serif(size: 9, color: AppColors.subText),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                              Text(
+                                profile.publicIdLabel,
+                                style: serif(size: 9, color: AppColors.subText),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 14),
                     SizedBox.square(
                       dimension: 180,
@@ -558,6 +560,7 @@ class _ExchangeConfirmScreenState extends ConsumerState<ExchangeConfirmScreen>
           : () => run(() async {
               final accepted = await requestExchange(widget.token!);
               if (!mounted) return;
+              if (accepted) ref.invalidate(friendsProvider);
               _showMessage(
                 context,
                 accepted
@@ -758,6 +761,8 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
             .read(incomingRequestsProvider.notifier)
             .respond(widget.requestId, accept: accept);
         if (!mounted) return;
+        // 承認したら、ともだちの帳に新しい友だちを取り込む。
+        if (accept) ref.invalidate(friendsProvider);
         _showMessage(
           context,
           accept ? '${party.nickname}さんとプロフィール帳を交換しました' : 'リクエストを断りました',
