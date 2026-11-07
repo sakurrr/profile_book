@@ -5,7 +5,7 @@ Supabase（PostgreSQL、Auth、Storage、Realtime）を使う。画面の仕様�
 ## 1. 基本方針
 
 - プロフィールは、QRコードの読み取りと承認を経て交換した相手にだけ公開する。例外は交換前の確認に使う項目で、詳しくは「5. 交換の流れ」に示す。
-- 必須のプロフィール項目は `nickname` のみ。未入力の項目は、空文字や空配列ではなく `NULL` で保存する。
+- DBで必須のプロフィール項目は `nickname` のみ。姓、名、せい、めいはアプリで必須にし、DBではNULL可とする。未入力の項目は、空文字や空配列ではなく `NULL` で保存する。
 - 相手には常に最新のプロフィールを見せる。交換時点のコピーは持たない。
 - 星座とお気に入り件数は保存せず、誕生日や一覧から算出する。
 - 退会時はデータを物理削除する。
@@ -37,9 +37,12 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | `id` | uuid | 不可 | 主キー。`auth.users.id` と同じ値 |
 | `public_id` | text | 不可 | 画面に表示するID。本人の確認と同名の区別に使う。自動発行、ユニーク、変更不可 |
 | `nickname` | text | 不可 | 呼んでほしい名前。空白のみは不可 |
-| `full_name` | text | 可 | 名前 |
-| `name_romaji` | text | 可 | ローマ字表記の名前 |
-| `name_kana` | text | 可 | 名前のふりがな。ともだち一覧の名前順に使う |
+| `family_name` | text | 可 | 姓。アプリで必須 |
+| `given_name` | text | 可 | 名。アプリで必須 |
+| `family_name_kana` | text | 可 | 姓のふりがな。アプリで必須。ともだち一覧の名前順に使う |
+| `given_name_kana` | text | 可 | 名のふりがな。アプリで必須 |
+| `family_name_romaji` | text | 可 | 姓のローマ字表記 |
+| `given_name_romaji` | text | 可 | 名のローマ字表記 |
 | `birth_year` | smallint | 可 | 誕生年。任意。入力するときは月日も必要 |
 | `birth_month` | smallint | 可 | 誕生月。誕生日は月と日の両方を入力するか、両方を未入力にする |
 | `birth_day` | smallint | 可 | 誕生日の日 |
@@ -101,9 +104,12 @@ create table public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
   public_id   text not null unique default upper(left(gen_random_uuid()::text, 8)),
   nickname    text not null check (char_length(btrim(nickname)) > 0),
-  full_name   text,
-  name_romaji text,
-  name_kana   text,
+  family_name        text,
+  given_name         text,
+  family_name_kana   text,
+  given_name_kana    text,
+  family_name_romaji text,
+  given_name_romaji  text,
   birth_year  smallint check (birth_year between 1900 and 2100),
   birth_month smallint check (birth_month between 1 and 12),
   birth_day   smallint check (birth_day between 1 and 31),
@@ -251,8 +257,17 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, nickname)
-  values (new.id, new.raw_user_meta_data ->> 'nickname');
+  insert into public.profiles (
+    id, nickname, family_name, given_name, family_name_kana, given_name_kana
+  )
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'nickname',
+    nullif(btrim(new.raw_user_meta_data ->> 'family_name'), ''),
+    nullif(btrim(new.raw_user_meta_data ->> 'given_name'), ''),
+    nullif(btrim(new.raw_user_meta_data ->> 'family_name_kana'), ''),
+    nullif(btrim(new.raw_user_meta_data ->> 'given_name_kana'), '')
+  );
 
   insert into public.exchange_codes (user_id)
   values (new.id);
@@ -268,15 +283,23 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 ```
 
-サインアップ時は、メタデータに `nickname` を渡す。ない場合はサインアップ自体が失敗する。
+サインアップ時は、メタデータに `nickname` と姓、名、せい、めいを渡す。`nickname` がない場合はサインアップ自体が失敗する。
 
 ```dart
 await supabase.auth.signUp(
   email: email,
   password: password,
-  data: {'nickname': nickname},
+  data: {
+    'family_name': familyName,
+    'given_name': givenName,
+    'family_name_kana': familyNameKana,
+    'given_name_kana': givenNameKana,
+    'nickname': nickname,
+  },
 );
 ```
+
+アプリから `signUp` の後に `profiles` を更新しないのは、メールアドレスの確認が終わるまでセッションがなく、RLSで更新できないためである。
 
 **匿名ログインは使わない。** `nickname` なしで `auth.users` に行が作られると、このトリガーで失敗する。現在の `lib/main.dart` の `signInAnonymously()` は、DB適用前に取り除き、Supabaseの匿名サインインも無効にする。
 
@@ -337,7 +360,8 @@ with check (owner_id = (select auth.uid()));
 
 revoke update on public.profiles from anon, authenticated;
 grant update (
-  nickname, full_name, name_romaji, name_kana, birth_year, birth_month, birth_day,
+  nickname, family_name, given_name, family_name_kana, given_name_kana,
+  family_name_romaji, given_name_romaji, birth_year, birth_month, birth_day,
   likes, hobby, message, avatar_path
 ) on public.profiles to authenticated;
 

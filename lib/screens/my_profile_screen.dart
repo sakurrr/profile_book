@@ -56,8 +56,20 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
 
   late final Profile _initial = widget.initial;
   bool _saving = false;
-  late final _fullName = TextEditingController(text: _initial.fullName);
-  late final _romaji = TextEditingController(text: _initial.nameRomaji);
+  late final _familyName = TextEditingController(text: _initial.familyName);
+  late final _givenName = TextEditingController(text: _initial.givenName);
+  late final _familyNameKana = TextEditingController(
+    text: _initial.familyNameKana,
+  );
+  late final _givenNameKana = TextEditingController(
+    text: _initial.givenNameKana,
+  );
+  late final _familyNameRomaji = TextEditingController(
+    text: _initial.familyNameRomaji,
+  );
+  late final _givenNameRomaji = TextEditingController(
+    text: _initial.givenNameRomaji,
+  );
   late final _nickname = TextEditingController(text: _initial.nickname);
   late final _hobby = TextEditingController(text: _initial.hobby);
   late final _message = TextEditingController(text: _initial.message);
@@ -68,7 +80,17 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
 
   @override
   void dispose() {
-    for (final controller in [_fullName, _romaji, _nickname, _hobby, _message]) {
+    for (final controller in [
+      _familyName,
+      _givenName,
+      _familyNameKana,
+      _givenNameKana,
+      _familyNameRomaji,
+      _givenNameRomaji,
+      _nickname,
+      _hobby,
+      _message,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -84,8 +106,12 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
     id: _initial.id,
     publicId: _initial.publicId,
     nickname: _nickname.text.trim(),
-    fullName: _orNull(_fullName),
-    nameRomaji: _orNull(_romaji),
+    familyName: _orNull(_familyName),
+    givenName: _orNull(_givenName),
+    familyNameKana: _orNull(_familyNameKana),
+    givenNameKana: _orNull(_givenNameKana),
+    familyNameRomaji: _orNull(_familyNameRomaji),
+    givenNameRomaji: _orNull(_givenNameRomaji),
     birthYear: _birthYear,
     birthMonth: _birthMonth,
     birthDay: _birthDay,
@@ -97,9 +123,16 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
 
   Future<void> _save() async {
     final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    if (_nickname.text.trim().isEmpty) {
+    final missing = {
+      '姓': _familyName,
+      '名': _givenName,
+      'せい': _familyNameKana,
+      'めい': _givenNameKana,
+      'ニックネーム': _nickname,
+    }.entries.where((entry) => _orNull(entry.value) == null).firstOrNull;
+    if (missing != null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('呼んでほしい名前を入力してください')),
+        SnackBar(content: Text('${missing.key}を入力してください')),
       );
       return;
     }
@@ -250,6 +283,31 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
     decoration: InputDecoration(hintText: hint),
   );
 
+  /// 姓と名の入力欄を横に並べる。
+  Widget _namePair(
+    (String, TextEditingController, String) family,
+    (String, TextEditingController, String) given,
+  ) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (final (index, (label, controller, hint)) in [
+        family,
+        given,
+      ].indexed) ...[
+        if (index > 0) const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FieldLabel(label),
+              _field(controller, hint: hint),
+            ],
+          ),
+        ),
+      ],
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -276,11 +334,20 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
                 children: [
                   const SectionTitle(number: '01', title: 'わたしのこと'),
                   const SizedBox(height: 14),
-                  const FieldLabel('名前'),
-                  _field(_fullName),
+                  _namePair(
+                    ('姓', _familyName, '例：小林'),
+                    ('名', _givenName, '例：みお'),
+                  ),
                   const SizedBox(height: 12),
-                  const FieldLabel('ローマ字の名前'),
-                  _field(_romaji, hint: '例：MIO KOBAYASHI'),
+                  _namePair(
+                    ('せい', _familyNameKana, '例：こばやし'),
+                    ('めい', _givenNameKana, '例：みお'),
+                  ),
+                  const SizedBox(height: 12),
+                  _namePair(
+                    ('姓（ローマ字）', _familyNameRomaji, '例：KOBAYASHI'),
+                    ('名（ローマ字）', _givenNameRomaji, '例：MIO'),
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +356,7 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const FieldLabel('呼んでほしい名前'),
+                            const FieldLabel('ニックネーム'),
                             _field(_nickname),
                           ],
                         ),
@@ -315,18 +382,19 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
                     maxLines: 4,
                     maxLength: _maxMessage,
                     style: const TextStyle(fontSize: 13, height: 1.7),
-                    buildCounter: (
-                      context, {
-                      required currentLength,
-                      required isFocused,
-                      required maxLength,
-                    }) => Text(
-                      '$currentLength / $maxLength文字',
-                      style: const TextStyle(
-                        fontSize: 9,
-                        color: AppColors.subText,
-                      ),
-                    ),
+                    buildCounter:
+                        (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          required maxLength,
+                        }) => Text(
+                          '$currentLength / $maxLength文字',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: AppColors.subText,
+                          ),
+                        ),
                   ),
                 ],
               ),

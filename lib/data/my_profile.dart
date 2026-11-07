@@ -26,8 +26,12 @@ class MyProfileNotifier extends AsyncNotifier<Profile> {
         .from('profiles')
         .update({
           'nickname': profile.nickname,
-          'full_name': profile.fullName,
-          'name_romaji': profile.nameRomaji,
+          'family_name': profile.familyName,
+          'given_name': profile.givenName,
+          'family_name_kana': profile.familyNameKana,
+          'given_name_kana': profile.givenNameKana,
+          'family_name_romaji': profile.familyNameRomaji,
+          'given_name_romaji': profile.givenNameRomaji,
           'birth_year': profile.birthYear,
           'birth_month': profile.birthMonth,
           'birth_day': profile.birthDay,

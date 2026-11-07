@@ -4,9 +4,12 @@ class Profile {
     required this.id,
     required this.publicId,
     required this.nickname,
-    this.fullName,
-    this.nameRomaji,
-    this.nameKana,
+    this.familyName,
+    this.givenName,
+    this.familyNameKana,
+    this.givenNameKana,
+    this.familyNameRomaji,
+    this.givenNameRomaji,
     this.birthYear,
     this.birthMonth,
     this.birthDay,
@@ -21,9 +24,12 @@ class Profile {
     id: json['id'] as String,
     publicId: json['public_id'] as String,
     nickname: json['nickname'] as String,
-    fullName: json['full_name'] as String?,
-    nameRomaji: json['name_romaji'] as String?,
-    nameKana: json['name_kana'] as String?,
+    familyName: json['family_name'] as String?,
+    givenName: json['given_name'] as String?,
+    familyNameKana: json['family_name_kana'] as String?,
+    givenNameKana: json['given_name_kana'] as String?,
+    familyNameRomaji: json['family_name_romaji'] as String?,
+    givenNameRomaji: json['given_name_romaji'] as String?,
     birthYear: json['birth_year'] as int?,
     birthMonth: json['birth_month'] as int?,
     birthDay: json['birth_day'] as int?,
@@ -35,9 +41,12 @@ class Profile {
   final String id;
   final String publicId;
   final String nickname;
-  final String? fullName;
-  final String? nameRomaji;
-  final String? nameKana;
+  final String? familyName;
+  final String? givenName;
+  final String? familyNameKana;
+  final String? givenNameKana;
+  final String? familyNameRomaji;
+  final String? givenNameRomaji;
   final int? birthYear;
   final int? birthMonth;
   final int? birthDay;
@@ -45,6 +54,15 @@ class Profile {
   final String? hobby;
   final String? message;
   final String? avatarAsset;
+
+  /// 「佐藤 みお」の形式。姓と名がどちらもなければ null。
+  String? get fullName => _joinNames([familyName, givenName]);
+
+  /// ともだち一覧の名前順に使う。せい、めいの順に並べる。
+  String? get nameKana => _joinNames([familyNameKana, givenNameKana]);
+
+  /// 「MIO SATO」の形式。ローマ字は名、姓の順に表示する。
+  String? get nameRomaji => _joinNames([givenNameRomaji, familyNameRomaji]);
 
   String get displayName => fullName ?? nickname;
 
@@ -63,11 +81,17 @@ class Profile {
 
   /// 「Hana's profile book」の表示に使う、ローマ字の名前の先頭。
   String get bookTitle {
-    final given = nameRomaji?.split(' ').first;
+    final given = givenNameRomaji;
     if (given == null || given.isEmpty) return 'Profile book';
     final name = given[0].toUpperCase() + given.substring(1).toLowerCase();
     return "$name's profile book";
   }
+}
+
+/// 入力のある部分だけを空白でつなぐ。どれもなければ null。
+String? _joinNames(List<String?> parts) {
+  final names = parts.nonNulls.where((part) => part.isNotEmpty);
+  return names.isEmpty ? null : names.join(' ');
 }
 
 String zodiacOf(int month, int day) {
