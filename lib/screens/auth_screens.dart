@@ -231,7 +231,7 @@ class _SignupScreen extends State<SignupScreen> {
         children: [
           const SectionTitle(number: '01', title: 'アカウント作成'),
           const SizedBox(height: 16),
-          const FieldLabel('呼んでほしい名前'),
+          const FieldLabel('名前（姓 名）'),
           TextField(
             style: TextStyle(fontSize: 14),
             decoration: InputDecoration(hintText: '例：佐藤みお'),
