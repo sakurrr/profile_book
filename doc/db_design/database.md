@@ -24,7 +24,7 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | テーブル | 目的 | 1レコードが指すもの |
 |---|---|---|
 | `profiles` | プロフィール帳の内容を保存する | ユーザー1人分のプロフィール帳 |
-| `exchange_codes` | QRコードと共有リンクのトークンを保存する | ユーザー1人が現在使っている交換コード |
+| `exchange_codes` | QRコードのトークンを保存する | ユーザー1人が現在使っている交換コード |
 | `exchange_requests` | 交換の申請と結果を保存する | 「誰が誰に申請したか」という1回の申請 |
 | `friendships` | ともだちの帳と、相手に対する自分だけの情報を保存する | 「ある人の帳に、ある友だちが1人載っている」という関係。交換成立で1組につき2行 |
 
@@ -39,6 +39,7 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | `nickname` | text | 不可 | 呼んでほしい名前。空白のみは不可 |
 | `full_name` | text | 可 | 名前 |
 | `name_romaji` | text | 可 | ローマ字表記の名前 |
+| `name_kana` | text | 可 | 名前のふりがな。ともだち一覧の名前順に使う |
 | `birth_month` | smallint | 可 | 誕生月。誕生日は月と日の両方を入力するか、両方を未入力にする |
 | `birth_day` | smallint | 可 | 誕生日の日 |
 | `likes` | text[] | 可 | 好きなもの。最大5件。自由入力 |
@@ -54,9 +55,9 @@ IDは次の3種類を使い分ける。
 |---|---|---|---|
 | `profiles.id` | FK、RLS | しない | 不可 |
 | `profiles.public_id` | 本人の確認、同名の区別 | `#7F3A92C1` の形式で表示 | 不可 |
-| `exchange_codes.token` | QRコード、共有リンク | しない | 再発行で変わる |
+| `exchange_codes.token` | QRコード | しない | 再発行で変わる |
 
-`public_id` では検索も交換もできない。交換にはQRコードか共有リンクのトークンが必要である。登録時にまれに重複した場合はUNIQUE制約でサインアップが失敗し、再度登録すれば別の値になる。
+`public_id` では検索も交換もできない。交換にはQRコードのトークンが必要である。登録時にまれに重複した場合はUNIQUE制約でサインアップが失敗し、再度登録すれば別の値になる。
 
 ### `exchange_codes`
 
@@ -66,7 +67,7 @@ IDは次の3種類を使い分ける。
 | `token` | text | 不可 | 推測できないランダム値。ユニーク |
 | `rotated_at` | timestamptz | 不可 | 最後に発行した日時 |
 
-有効期限は設けない。保存した画像や共有リンクが漏れた場合は、再発行で古いコードを無効にする。
+有効期限は設けない。画面の写真などでコードが漏れた場合は、再発行で古いコードを無効にする。
 
 ### `exchange_requests`
 
@@ -101,6 +102,7 @@ create table public.profiles (
   nickname    text not null check (char_length(btrim(nickname)) > 0),
   full_name   text,
   name_romaji text,
+  name_kana   text,
   birth_month smallint check (birth_month between 1 and 12),
   birth_day   smallint check (birth_day between 1 and 31),
   likes       text[] check (cardinality(likes) <= 5),
@@ -183,8 +185,8 @@ create index friendships_friend
 
 | 順番 | 出来事 | 処理 | データの変化 |
 |---|---|---|---|
-| 1 | はなさんがコードを読み取る | `preview-exchange-code` | なし。確認画面にみおさんの情報を表示 |
-| 2 | はなさんが承認ボタンを押す | `request_exchange` | `exchange_requests` に `pending` の行を追加 |
+| 1 | はなさんがコードを読み取る | `preview_exchange_code` | なし。確認画面にみおさんの呼び名と表示用IDを表示 |
+| 2 | はなさんが「交換を申請する」を押す | `request_exchange` | `exchange_requests` に `pending` の行を追加 |
 | 3 | みおさんに通知が届く | Realtime | なし |
 | 4 | みおさんが承認する | `respond_exchange` | 申請を `accepted` にし、`friendships` を2行追加 |
 | 5 | お互いのプロフィールを見る | `profiles` の読み取り | なし |
@@ -196,11 +198,11 @@ create index friendships_friend
 
 ### 交換前に公開される項目
 
-有効なコードを読み取ったログイン済みユーザーは、確認画面で持ち主の次の項目を見られる。申請を受けた人も、承認前に申請者の同じ項目を見られる。
+有効なコードを読み取ったログイン済みユーザーは、確認画面で持ち主の次の項目だけを見られる。申請を受けた人も、承認前に申請者の同じ項目だけを見られる。
 
-`public_id`、`nickname`、`full_name`、`name_romaji`、誕生日、`likes`、`message`、アバター
+`public_id`、`nickname`
 
-`hobby` は確認画面に表示しないので、交換が成立するまで公開しない。コードを見せない限り公開されないが、保存した画像や共有リンクが第三者に渡ると、ログイン済みの誰でも確認画面を開ける。この場合はコードの再発行で止める。
+アバターを含むそれ以外の項目は、交換が成立するまで公開しない。共有リンクと画像の保存は作らないので、コードは対面で見せたときにだけ伝わる。画面の写真などでコードが第三者に渡ると、ログイン済みの誰でも確認画面を開けるので、この場合はコードの再発行で止める。
 
 ## 6. RPCとEdge Function
 
@@ -208,16 +210,16 @@ create index friendships_friend
 
 | 名前 | 種類 | 処理 |
 |---|---|---|
-| `preview-exchange-code` | Edge Function | トークンから、持ち主の公開項目、5分間有効なアバターの署名付きURL、現在の関係（`none` / `self` / `friend` / `pending_outgoing` / `pending_incoming`）を返す |
+| `preview_exchange_code(p_token text)` | RPC | トークンから、持ち主の `public_id`、`nickname`、現在の関係（`none` / `self` / `friend` / `pending_outgoing` / `pending_incoming`）を返す。無効なトークンなら0行を返す |
 | `request_exchange(p_token text)` | RPC | 自分のコード、既存の友だち、重複申請を確認して申請を作る。逆向きの `pending` があれば成立させる |
 | `respond_exchange(p_request_id uuid, p_accept boolean)` | RPC | 相手本人の `pending` のみ処理する。承認時は同じトランザクションで `friendships` を2行作る |
 | `cancel_exchange(p_request_id uuid)` | RPC | 申請者本人の `pending` を `cancelled` にする |
-| `list_incoming_exchange_requests()` | RPC | 自分宛ての `pending` と、申請者の公開項目を返す |
+| `list_incoming_exchange_requests()` | RPC | 自分宛ての `pending` と、申請者の `public_id`、`nickname` を返す |
 | `rotate_exchange_code()` | RPC | トークンを作り直し、新しい値を返す |
 | `remove_friend(p_friend_id uuid)` | RPC | 自分と相手の `friendships` を2行とも削除する |
 | `delete-account` | Edge Function | 本人のアバターと `auth.users` の行を削除する |
 
-確認画面をEdge Functionにするのは、交換前の相手のアバターを表示するためである。トークンを知っているかどうかはStorageのポリシーでは判定できないので、`service_role` で署名付きURLを発行する。
+交換前はアバターを見せないので、確認画面は署名付きURLを発行するEdge Functionを使わず、RPCで作る。
 
 ## 7. トリガー
 
@@ -332,7 +334,7 @@ with check (owner_id = (select auth.uid()));
 
 revoke update on public.profiles from anon, authenticated;
 grant update (
-  nickname, full_name, name_romaji, birth_month, birth_day,
+  nickname, full_name, name_romaji, name_kana, birth_month, birth_day,
   likes, hobby, message, avatar_path
 ) on public.profiles to authenticated;
 
@@ -345,7 +347,7 @@ grant update (is_favorite, memo, first_viewed_at)
 
 アバターは非公開バケット `avatars` に `{ユーザーID}/avatar.jpg` として保存し、署名付きURLで配信する。署名付きURLの有効期限は1時間程度とする。
 
-閲覧できるのは、本人、友だち、自分宛てに申請中の人である。
+閲覧できるのは、本人と友だちである。交換前の相手には見せない。
 
 ```sql
 create policy "アバターを読める"
@@ -358,12 +360,6 @@ using (
       select 1 from public.friendships f
       where f.owner_id = (select auth.uid())
         and f.friend_id::text = (storage.foldername(name))[1]
-    )
-    or exists (
-      select 1 from public.exchange_requests r
-      where r.addressee_id = (select auth.uid())
-        and r.status = 'pending'
-        and r.requester_id::text = (storage.foldername(name))[1]
     )
   )
 );

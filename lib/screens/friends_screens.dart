@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/theme.dart';
 import '../data/mock_data.dart';
 import '../widgets/common.dart';
+
+/// 友だち一覧の並び替えの方法
+enum _FriendSort {
+  exchangedAt,
+
+  ///交換した順
+  name,
+
+  ///名前順
+  birthday,
+
+  ///誕生日順
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -14,8 +28,55 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウトしますか？'),
+        content: const Text('ログイン画面に戻ります。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ログアウト'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await Supabase.instance.client.auth.signOut();
+
+      if (!mounted) return;
+      context.go('/login');
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ログアウトに失敗しました。もう一度お試しください。')),
+      );
+    }
+  }
+
   String _query = '';
   bool _favoritesOnly = false;
+
+  _FriendSort _sort = _FriendSort.exchangedAt;
+  String get _sortLabel {
+    switch (_sort) {
+      case _FriendSort.exchangedAt:
+        return '交換した順';
+      case _FriendSort.name:
+        return '名前順';
+      case _FriendSort.birthday:
+        return '誕生日順';
+    }
+  }
 
   bool _matches(Friend friend) {
     if (_favoritesOnly && !friend.isFavorite) return false;
@@ -27,12 +88,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ].any((text) => text.contains(_query));
   }
 
+  void _sortFriends(List<Friend> friends) {
+    friends.sort((a, b) {
+      switch (_sort) {
+        case _FriendSort.exchangedAt:
+          return b.exchangedAt.compareTo(a.exchangedAt);
+        case _FriendSort.name:
+          final kanaA = a.profile.nameKana?.trim() ?? '';
+          final kanaB = b.profile.nameKana?.trim() ?? '';
+          if (kanaA.isEmpty && kanaB.isNotEmpty) return 1;
+          if (kanaA.isNotEmpty && kanaB.isEmpty) return -1;
+          final result = kanaA.compareTo(kanaB);
+          if (result != 0) return result;
+          final nameResult = a.profile.displayName.compareTo(
+            b.profile.displayName,
+          );
+          if (nameResult != 0) return nameResult;
+          return a.exchangedAt.compareTo(b.exchangedAt);
+
+        case _FriendSort.birthday:
+          final aMonth = a.profile.birthMonth;
+          final aDay = a.profile.birthDay;
+          final bMonth = b.profile.birthMonth;
+          final bDay = b.profile.birthDay;
+
+          final aHasBirthday = aMonth != null && aDay != null;
+          final bHasBirthday = bMonth != null && bDay != null;
+
+          if (!aHasBirthday && !bHasBirthday) {
+            return a.profile.displayName.compareTo(b.profile.displayName);
+          } //両方誕生日が登録されていない時は名前順で表示する
+
+          if (!aHasBirthday) return 1;
+          if (!bHasBirthday) return -1;
+
+          // 誕生月を比較する
+          final monthCompare = aMonth.compareTo(bMonth);
+          if (monthCompare != 0) return monthCompare;
+          //  誕生日を比較する
+          final dayCompare = aDay.compareTo(bDay);
+          if (dayCompare != 0) return dayCompare;
+
+          // 誕生日が同じ場合は名前順で表示する
+          return a.profile.displayName.compareTo(b.profile.displayName);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final friends = ref.watch(friendsProvider);
     final nickname = ref.watch(myProfileProvider).nickname;
     final favorites = friends.where((f) => f.isFavorite).length;
     final visible = friends.where(_matches).toList();
+    _sortFriends(visible);
+    final incoming = ref.watch(incomingRequestsProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -41,11 +151,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           children: [
             BrandHeader(
-              trailing: CircleIconButton(
-                icon: Icons.notifications_none,
-                onPressed: () => showComingSoon(context, '届いた申請の画面'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Badge.count(
+                    count: incoming.length,
+                    isLabelVisible: incoming.isNotEmpty,
+                    backgroundColor: AppColors.accent,
+                    child: CircleIconButton(
+                      icon: Icons.notifications_none,
+                      // 届いた申請の一覧ができるまでは、古い申請から1件ずつ開く。
+                      onPressed: () => incoming.isEmpty
+                          ? ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('交換リクエストは届いていません')),
+                            )
+                          : context.go(
+                              '/exchange/requests/${incoming.first.id}',
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleIconButton(
+                    icon: Icons.logout,
+                    onPressed: _confirmLogout,
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(height: 4),
             HeroBanner(
               eyebrow: '$nicknameさん、おかえりなさい',
@@ -78,14 +211,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   style: serif(size: 16, color: AppColors.accent),
                 ),
                 const Spacer(),
-                const Text(
-                  '交換した順',
-                  style: TextStyle(fontSize: 10, color: AppColors.subText),
+
+                PopupMenuButton<_FriendSort>(
+                  initialValue: _sort,
+                  onSelected: (value) {
+                    setState(() {
+                      _sort = value;
+                    });
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: _FriendSort.exchangedAt,
+                      child: Text('交換した順'),
+                    ),
+                    const PopupMenuItem(
+                      value: _FriendSort.name,
+                      child: Text('名前順'),
+                    ),
+                    const PopupMenuItem(
+                      value: _FriendSort.birthday,
+                      child: Text('誕生日順'),
+                    ),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _sortLabel,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.subText,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.sort,
+                        size: 16,
+                        color: AppColors.subText,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.sort, size: 16),
               ],
             ),
+
             const SizedBox(height: 10),
             Row(
               children: [
@@ -263,9 +432,7 @@ class _FriendDetailScreenState extends ConsumerState<FriendDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _memo = TextEditingController(
-      text: _find(ref.read(friendsProvider))?.memo,
-    );
+    _memo = TextEditingController(text: _find(ref.read(friendsProvider))?.memo);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ref.read(friendsProvider.notifier).markViewed(widget.friendId);
