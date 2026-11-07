@@ -8,11 +8,19 @@ import 'app/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  debugPrint('① Flutter起動開始');
+
   await Supabase.initialize(
     url: const String.fromEnvironment('SUPABASE_URL'),
     publishableKey: const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
   );
+
+  debugPrint('② Supabase初期化完了');
+
   runApp(const ProviderScope(child: App()));
+
+  debugPrint('③ runApp実行完了');
 }
 
 class App extends StatelessWidget {

@@ -26,6 +26,7 @@ class _LoginScreen extends State<LoginScreen> {
   String email = '';
   String password = '';
   bool sucsess = true; //ログイン認証成功(true)or失敗(false)
+  bool push1 = false;
 
   @override
   void dispose() {
@@ -71,10 +72,11 @@ class _LoginScreen extends State<LoginScreen> {
 
             onPressed: () async {
               //1.入力されたメールアドレスとパスワードを取得
-              setState(() {
-                email = emailController.text;
-                password = passwordController.text;
-              });
+
+              email = emailController.text;
+              password = passwordController.text;
+              push1 = true;
+
               //2.バックエンドの認証APIをたたく
               try {
                 // ② Supabaseでログイン認証
@@ -104,6 +106,15 @@ class _LoginScreen extends State<LoginScreen> {
               }
             },
           ),
+          if (!sucsess && push1)
+            Text(
+              'メールアドレスまたはパスワードが間違っています',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: const Color.fromARGB(255, 236, 14, 14),
+              ),
+            ),
           //Text('email: $email , password: $password'),//デバック用
         ],
       ),
@@ -145,12 +156,32 @@ class _LoginScreen extends State<LoginScreen> {
               'メールアドレスは友だちに公開されません',
               style: TextStyle(fontSize: 10, color: AppColors.subText),
             ),
-            if (!sucsess) Text('メールアドレスまたはパスワードが間違っています'),
           ],
         ),
       ],
     );
   }
+}
+
+//バリデーション
+abstract class Validator<T> {
+  bool validate(T value);
+
+  String getMessage();
+}
+
+class RequiredValidator implements Validator<String?> {
+  @override
+  bool validate(String? value) {
+    if (value == null) {
+      return false;
+    }
+
+    return value.trim().isNotEmpty;
+  }
+
+  @override
+  String getMessage() => '必須項目です';
 }
 
 //アカウント作成画面
@@ -166,14 +197,20 @@ class _SignupScreen extends State<SignupScreen> {
   final furiganaController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  final nicknameController = TextEditingController();
 
   String name = '';
   String furigana = '';
   String email = '';
   String password = '';
+  String nickname = '';
+  bool vali = false;
+  bool push = false;
+
   @override
   void dispose() {
     nameController.dispose();
+    furiganaController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
@@ -206,6 +243,12 @@ class _SignupScreen extends State<SignupScreen> {
             decoration: InputDecoration(hintText: '例：さとうみお'),
             controller: furiganaController,
           ),
+          const FieldLabel('ニックネーム'),
+          TextField(
+            style: TextStyle(fontSize: 14),
+            decoration: InputDecoration(hintText: '例：みお'),
+            controller: nicknameController,
+          ),
           const SizedBox(height: 14),
           const FieldLabel('メールアドレス'),
           _EmailField(hint: '例：mio@example.com', controller: emailController),
@@ -222,19 +265,61 @@ class _SignupScreen extends State<SignupScreen> {
             label: 'アカウントを作成する',
             //アカウント作成APIをたたく．入力された値をバックエンドに渡す．バックエンド側でDBへ登録
             //アカウント作成が成功したらそのままログイン画面？？
-            onPressed: () {
+            onPressed: () async {
+              name = nameController.text;
+              furigana = furiganaController.text;
+              email = emailController.text;
+              password = passwordController.text;
+              nickname = nicknameController.text;
+              push = true;
+
+              //バリデーション処理
+              final validation = RequiredValidator();
+              final isValid =
+                  validation.validate(name) &&
+                  validation.validate(furigana) &&
+                  validation.validate(email) &&
+                  validation.validate(password);
+
               setState(() {
-                name = nameController.text;
-                furigana = furiganaController.text;
-                email = emailController.text;
-                password = passwordController.text;
+                vali = isValid;
               });
+              if (!isValid) {
+                return;
+              }
+              if (vali) {
+                try {
+                  // アカウント登録
+                  await Supabase.instance.client.auth.signUp(
+                    email: email,
+                    password: password,
+                    data: {
+                      'name': name,
+                      'furigana': furigana,
+                      'nickname': nickname,
+                    },
+                  );
+                } catch (e) {
+                  // その他の予期しないエラー
+                  if (!mounted) return;
+                  debugPrint('予期しないエラー: $e');
+                }
+              }
               //context.go('/friends');//画面遷移
             },
           ),
           // Text(
           //   'name: $name, furigana: $furigana, email: $email, password: $password',
           // ),//デバック用
+          if (!vali && push)
+            Text(
+              '入力に不備があります',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: const Color.fromARGB(255, 236, 14, 14),
+              ),
+            ),
           const SizedBox(height: 12),
           const Text(
             '登録後、メールアドレスの確認に進みます。',
