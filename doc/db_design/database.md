@@ -210,7 +210,7 @@ create index friendships_friend
 
 | 名前 | 種類 | 処理 |
 |---|---|---|
-| `preview_exchange_code(p_token text)` | RPC | トークンから、持ち主の `public_id`、`nickname`、現在の関係（`none` / `self` / `friend` / `pending_outgoing` / `pending_incoming`）を返す。無効なトークンなら0行を返す |
+| `preview_exchange_code(p_token text)` | RPC | トークンから、持ち主の `owner_id`、`public_id`、`nickname`、現在の関係（`none` / `self` / `friend` / `pending_outgoing` / `pending_incoming`）、申請中なら `request_id` を返す。無効なトークンなら0行を返す。`owner_id` と `request_id` は画面に表示せず、友だちの帳を開く、申請を取り消す、届いた申請を開くために使う |
 | `request_exchange(p_token text)` | RPC | 自分のコード、既存の友だち、重複申請を確認して申請を作る。逆向きの `pending` があれば成立させる |
 | `respond_exchange(p_request_id uuid, p_accept boolean)` | RPC | 相手本人の `pending` のみ処理する。承認時は同じトランザクションで `friendships` を2行作る |
 | `cancel_exchange(p_request_id uuid)` | RPC | 申請者本人の `pending` を `cancelled` にする |
