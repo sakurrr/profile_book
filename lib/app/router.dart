@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/auth_screens.dart';
 import '../screens/exchange_screens.dart';
@@ -7,8 +10,37 @@ import '../screens/friends_screens.dart';
 import '../screens/my_profile_screen.dart';
 import 'theme.dart';
 
+/// ログインしていなくても開ける画面。
+const _authPaths = {'/login', '/signup'};
+
+/// ログイン状態が変わったら、`redirect` をもう一度判定させる。
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh() {
+    _subscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (_) => notifyListeners(),
+    );
+  }
+
+  late final StreamSubscription<AuthState> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
 final appRouter = GoRouter(
-  initialLocation: '/login',
+  // 端末に保存されたセッションが残っていれば、ログイン画面を経由せずにホームから始まる。
+  initialLocation: '/friends',
+  refreshListenable: _AuthRefresh(),
+  redirect: (_, state) {
+    final loggedIn = Supabase.instance.client.auth.currentSession != null;
+    final onAuthPage = _authPaths.contains(state.matchedLocation);
+    if (!loggedIn && !onAuthPage) return '/login';
+    if (loggedIn && onAuthPage) return '/friends';
+    return null;
+  },
   routes: [
     GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
     GoRoute(path: '/signup', builder: (_, _) => const SignupScreen()),
@@ -21,11 +53,23 @@ final appRouter = GoRouter(
               path: '/friends',
               builder: (_, _) => const HomeScreen(),
               routes: [
+                // ベルから開く。`:id` より先に置き、友だちのIDと区別する。
+                GoRoute(
+                  path: 'requests',
+                  builder: (_, _) => const ExchangeRequestListScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      builder: (_, state) => ExchangeRequestScreen(
+                        requestId: state.pathParameters['id']!,
+                      ),
+                    ),
+                  ],
+                ),
                 GoRoute(
                   path: ':id',
-                  builder: (_, state) => FriendDetailScreen(
-                    friendId: state.pathParameters['id']!,
-                  ),
+                  builder: (_, state) =>
+                      FriendDetailScreen(friendId: state.pathParameters['id']!),
                 ),
               ],
             ),

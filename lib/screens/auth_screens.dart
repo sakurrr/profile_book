@@ -193,28 +193,142 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreen extends State<SignupScreen> {
-  final nameController = TextEditingController();
-  final furiganaController = TextEditingController();
+  /// 半角英字と数字を両方含む、半角8文字以上。
+  static final _passwordPattern = RegExp(
+    r'^(?=.*[A-Za-z])(?=.*[0-9])[\x21-\x7E]{8,}$',
+  );
+
+  final familyNameController = TextEditingController();
+  final givenNameController = TextEditingController();
+  final familyNameKanaController = TextEditingController();
+  final givenNameKanaController = TextEditingController();
+  final nicknameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final nicknameController = TextEditingController();
 
-  String name = '';
-  String furigana = '';
-  String email = '';
-  String password = '';
-  String nickname = '';
-  bool vali = false;
-  bool push = false;
+  /// 欄ごとのエラー。送信するまでは表示しない。
+  Map<TextEditingController, String> errors = {};
+  String? submitError;
+  bool sending = false;
 
   @override
   void dispose() {
-    nameController.dispose();
-    furiganaController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
+    for (final controller in [
+      familyNameController,
+      givenNameController,
+      familyNameKanaController,
+      givenNameKanaController,
+      nicknameController,
+      emailController,
+      passwordController,
+    ]) {
+      controller.dispose();
+    }
     super.dispose();
   }
+
+  //バリデーション。必須の欄が空白のみでないことと、パスワードの形式を確かめる
+  Map<TextEditingController, String> validate() {
+    final required = RequiredValidator();
+    final result = {
+      for (final controller in [
+        familyNameController,
+        givenNameController,
+        familyNameKanaController,
+        givenNameKanaController,
+        nicknameController,
+        emailController,
+        passwordController,
+      ])
+        if (!required.validate(controller.text))
+          controller: required.getMessage(),
+    };
+    if (!result.containsKey(passwordController) &&
+        !_passwordPattern.hasMatch(passwordController.text)) {
+      result[passwordController] = '半角英字と数字を含む8文字以上にしてください';
+    }
+    return result;
+  }
+
+  /// Supabase Auth のエラーを、画面に表示する文言にする。
+  String signupErrorMessage(AuthException error) => switch (error) {
+    AuthWeakPasswordException() => 'パスワードは半角英字と数字を含む8文字以上にしてください',
+    AuthException(code: 'user_already_exists' || 'email_exists') =>
+      'このメールアドレスはすでに登録されています',
+    AuthException(code: 'email_address_invalid' || 'validation_failed') =>
+      'メールアドレスの形式が正しくありません',
+    AuthException(
+      code: 'over_request_rate_limit' || 'over_email_send_rate_limit',
+    ) =>
+      '時間をおいて、もう一度お試しください',
+    _ => '登録に失敗しました。もう一度お試しください。',
+  };
+
+  Future<void> submit() async {
+    final result = validate();
+    setState(() {
+      errors = result;
+      submitError = null;
+    });
+    if (result.isNotEmpty) return;
+
+    setState(() => sending = true);
+    try {
+      // アカウント登録。姓、名、せい、めい、ニックネームはトリガーで profiles に保存される
+      await Supabase.instance.client.auth.signUp(
+        email: emailController.text.trim(),
+        password: passwordController.text,
+        data: {
+          'family_name': familyNameController.text.trim(),
+          'given_name': givenNameController.text.trim(),
+          'family_name_kana': familyNameKanaController.text.trim(),
+          'given_name_kana': givenNameKanaController.text.trim(),
+          'nickname': nicknameController.text.trim(),
+        },
+      );
+      if (!mounted) return;
+      context.go('/login'); //画面遷移
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      debugPrint('アカウント作成エラー: $e');
+      setState(() => submitError = signupErrorMessage(e));
+    } catch (e) {
+      // その他の予期しないエラー
+      if (!mounted) return;
+      debugPrint('予期しないエラー: $e');
+      setState(() => submitError = '通信に失敗しました。もう一度お試しください。');
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Widget _textField(TextEditingController controller, String hint) => TextField(
+    controller: controller,
+    style: const TextStyle(fontSize: 14),
+    decoration: InputDecoration(hintText: hint, errorText: errors[controller]),
+  );
+
+  /// 姓と名の入力欄を横に並べる。
+  Widget _namePair(
+    (String, TextEditingController, String) family,
+    (String, TextEditingController, String) given,
+  ) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (final (index, (label, controller, hint)) in [
+        family,
+        given,
+      ].indexed) ...[
+        if (index > 0) const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [FieldLabel(label), _textField(controller, hint)],
+          ),
+        ),
+      ],
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -231,30 +345,37 @@ class _SignupScreen extends State<SignupScreen> {
         children: [
           const SectionTitle(number: '01', title: 'アカウント作成'),
           const SizedBox(height: 16),
-          const FieldLabel('名前（姓 名）'),
-          TextField(
-            style: TextStyle(fontSize: 14),
-            decoration: InputDecoration(hintText: '例：佐藤みお'),
-            controller: nameController,
+          _namePair(
+            ('姓', familyNameController, '例：佐藤'),
+            ('名', givenNameController, '例：みお'),
           ),
-          const FieldLabel('ふりがな'),
-          TextField(
-            style: TextStyle(fontSize: 14),
-            decoration: InputDecoration(hintText: '例：さとうみお'),
-            controller: furiganaController,
+          const SizedBox(height: 14),
+          _namePair(
+            ('せい', familyNameKanaController, '例：さとう'),
+            ('めい', givenNameKanaController, '例：みお'),
           ),
+          const SizedBox(height: 14),
           const FieldLabel('ニックネーム'),
-          TextField(
-            style: TextStyle(fontSize: 14),
-            decoration: InputDecoration(hintText: '例：みお'),
-            controller: nicknameController,
+          _textField(nicknameController, '例：みお'),
+          const SizedBox(height: 6),
+          const Text(
+            '交換する前の相手には、ニックネームだけが表示されます',
+            style: TextStyle(fontSize: 10, color: AppColors.subText),
           ),
           const SizedBox(height: 14),
           const FieldLabel('メールアドレス'),
-          _EmailField(hint: '例：mio@example.com', controller: emailController),
+          _EmailField(
+            hint: '例：mio@example.com',
+            controller: emailController,
+            errorText: errors[emailController],
+          ),
           const SizedBox(height: 14),
           const FieldLabel('パスワード'),
-          _PasswordField(hint: 'パスワードを設定', controller: passwordController),
+          _PasswordField(
+            hint: 'パスワードを設定',
+            controller: passwordController,
+            errorText: errors[passwordController],
+          ),
           const SizedBox(height: 8),
           const Text(
             '半角英字と数字を含む8文字以上',
@@ -263,63 +384,19 @@ class _SignupScreen extends State<SignupScreen> {
           const SizedBox(height: 32),
           PrimaryButton(
             label: 'アカウントを作成する',
-            //アカウント作成APIをたたく．入力された値をバックエンドに渡す．バックエンド側でDBへ登録
-            //アカウント作成が成功したらそのままログイン画面？？
-            onPressed: () async {
-              name = nameController.text;
-              furigana = furiganaController.text;
-              email = emailController.text;
-              password = passwordController.text;
-              nickname = nicknameController.text;
-              push = true;
-
-              //バリデーション処理
-              final validation = RequiredValidator();
-              final isValid =
-                  validation.validate(name) &&
-                  validation.validate(furigana) &&
-                  validation.validate(email) &&
-                  validation.validate(password);
-              setState(() {
-                vali = isValid;
-              });
-              if (!isValid) {
-                return;
-              }
-              if (vali) {
-                try {
-                  // アカウント登録
-                  await Supabase.instance.client.auth.signUp(
-                    email: email,
-                    password: password,
-                    data: {
-                      'name': name,
-                      'furigana': furigana,
-                      'nickname': nickname,
-                    },
-                  );
-                  if (!mounted) return;
-                  context.go('/login'); //画面遷移
-                } catch (e) {
-                  // その他の予期しないエラー
-                  if (!mounted) return;
-                  debugPrint('予期しないエラー: $e');
-                }
-              }
-            },
+            onPressed: sending ? null : submit,
           ),
-          // Text(
-          //   'name: $name, furigana: $furigana, email: $email, password: $password',
-          // ),//デバック用
-          if (!vali && push)
+          if (submitError != null) ...[
+            const SizedBox(height: 8),
             Text(
-              '入力に不備があります',
+              submitError!,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 10,
-                color: const Color.fromARGB(255, 236, 14, 14),
+                color: Color.fromARGB(255, 236, 14, 14),
               ),
             ),
+          ],
           const SizedBox(height: 12),
           const Text(
             '登録後、メールアドレスの確認に進みます。',
@@ -409,25 +486,35 @@ class _AuthLayout extends StatelessWidget {
 }
 
 class _EmailField extends StatelessWidget {
-  const _EmailField({required this.hint, required this.controller});
+  const _EmailField({
+    required this.hint,
+    required this.controller,
+    this.errorText,
+  });
 
   final String hint;
   final TextEditingController controller;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
     keyboardType: TextInputType.emailAddress,
     style: const TextStyle(fontSize: 14),
-    decoration: InputDecoration(hintText: hint),
+    decoration: InputDecoration(hintText: hint, errorText: errorText),
   );
 }
 
 class _PasswordField extends StatefulWidget {
-  const _PasswordField({required this.hint, required this.controller});
+  const _PasswordField({
+    required this.hint,
+    required this.controller,
+    this.errorText,
+  });
 
   final String hint;
   final TextEditingController controller;
+  final String? errorText;
 
   @override
   State<_PasswordField> createState() => _PasswordFieldState();
@@ -443,6 +530,7 @@ class _PasswordFieldState extends State<_PasswordField> {
     style: const TextStyle(fontSize: 14),
     decoration: InputDecoration(
       hintText: widget.hint,
+      errorText: widget.errorText,
       suffixIcon: IconButton(
         icon: Icon(
           _obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,

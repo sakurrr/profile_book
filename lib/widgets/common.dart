@@ -195,7 +195,7 @@ class SecondaryButton extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Color color;
 
   @override
@@ -478,13 +478,14 @@ class ProfileBookCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (profile.birthdayLabel != null) ...[
-                  _birthdayRow(),
-                  const Divider(color: AppColors.border, height: 24),
-                ],
-                if (likes.isNotEmpty) ...[
-                  const _CaptionLabel('好きなもの'),
-                  const SizedBox(height: 6),
+                // 未入力の項目も同じ位置に「未記入」と出し、人によって形を変えない。
+                _birthdayRow(),
+                const Divider(color: AppColors.border, height: 24),
+                const _CaptionLabel('好きなもの'),
+                const SizedBox(height: 6),
+                if (likes.isEmpty)
+                  const _ValueText(null)
+                else
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
@@ -496,34 +497,27 @@ class ProfileBookCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                ],
-                if (profile.hobby != null) ...[
-                  const _CaptionLabel('趣味'),
-                  const SizedBox(height: 6),
-                  Text(profile.hobby!, style: const TextStyle(fontSize: 13)),
-                  const SizedBox(height: 14),
-                ],
-                if (message != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(13),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _CaptionLabel('みんなにひとこと'),
-                        const SizedBox(height: 6),
-                        Text(
-                          message,
-                          style: const TextStyle(fontSize: 13, height: 1.85),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 14),
+                const _CaptionLabel('趣味'),
+                const SizedBox(height: 6),
+                _ValueText(profile.hobby),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _CaptionLabel('みんなにひとこと'),
+                      const SizedBox(height: 6),
+                      _ValueText(message, height: 1.85),
+                    ],
+                  ),
+                ),
                 if (footer != null) ...[const SizedBox(height: 12), footer!],
               ],
             ),
@@ -600,21 +594,39 @@ class ProfileBookCard extends StatelessWidget {
   Widget _birthdayRow() => IntrinsicHeight(
     child: Row(
       children: [
-        Expanded(child: _labeled('誕生日', profile.birthdayLabel!)),
+        Expanded(child: _labeled('誕生日', profile.birthdayLabel)),
         const VerticalDivider(color: AppColors.border, width: 1),
         const SizedBox(width: 16),
-        Expanded(child: _labeled('星座', profile.zodiac!)),
+        Expanded(child: _labeled('星座', profile.zodiac)),
       ],
     ),
   );
 
-  Widget _labeled(String label, String value) => Column(
+  Widget _labeled(String label, String? value) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _CaptionLabel(label),
       const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontSize: 13)),
+      _ValueText(value),
     ],
+  );
+}
+
+/// プロフィール帳の項目の値。未入力なら薄いグレーで「未記入」と出す。
+class _ValueText extends StatelessWidget {
+  const _ValueText(this.value, {this.height});
+
+  final String? value;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    value ?? '未記入',
+    style: TextStyle(
+      fontSize: 13,
+      height: height,
+      color: value == null ? AppColors.hint : null,
+    ),
   );
 }
 
