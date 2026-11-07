@@ -280,7 +280,6 @@ class _SignupScreen extends State<SignupScreen> {
                   validation.validate(furigana) &&
                   validation.validate(email) &&
                   validation.validate(password);
-
               setState(() {
                 vali = isValid;
               });
@@ -299,13 +298,14 @@ class _SignupScreen extends State<SignupScreen> {
                       'nickname': nickname,
                     },
                   );
+                  if (!mounted) return;
+                  context.go('/login'); //画面遷移
                 } catch (e) {
                   // その他の予期しないエラー
                   if (!mounted) return;
                   debugPrint('予期しないエラー: $e');
                 }
               }
-              //context.go('/friends');//画面遷移
             },
           ),
           // Text(
