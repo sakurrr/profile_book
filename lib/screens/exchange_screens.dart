@@ -743,12 +743,6 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
         .firstOrNull;
     return _ExchangePage(
       title: '交換リクエスト',
-<<<<<<< HEAD
-      onBack: () => context.go('/friends'),
-      children: request == null
-          ? const [_Notice('このリクエストは、もう届いていません。')]
-          : _content(context, ref, request.requester),
-=======
       children: switch (requests) {
         _ when request != null => _content(request.requester),
         AsyncData() => const [_Notice('このリクエストは、もう届いていません。')],
@@ -757,7 +751,6 @@ class _ExchangeRequestScreenState extends ConsumerState<ExchangeRequestScreen>
         ),
         _ => const [_Loading()],
       },
->>>>>>> origin/main
     );
   }
 
@@ -823,15 +816,10 @@ class _Loading extends StatelessWidget {
 
 /// 確認画面と交換リクエストで共通の、ヘッダー付きの縦スクロール画面。
 class _ExchangePage extends StatelessWidget {
-  const _ExchangePage({
-    required this.title,
-    required this.children,
-    this.onBack,
-  });
+  const _ExchangePage({required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
-  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -840,7 +828,7 @@ class _ExchangePage extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
         children: [
-          PageHeader(title: title, onBack: onBack ?? () => _closePage(context)),
+          PageHeader(title: title, onBack: () => _closePage(context)),
           ...children,
         ],
       ),
