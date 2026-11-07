@@ -237,7 +237,11 @@ class PaperCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: AppColors.border),
       boxShadow: const [
-        BoxShadow(color: Color(0x0D343850), blurRadius: 8, offset: Offset(0, 2)),
+        BoxShadow(
+          color: Color(0x0D343850),
+          blurRadius: 8,
+          offset: Offset(0, 2),
+        ),
       ],
     ),
     child: child,
@@ -479,7 +483,15 @@ class ProfileBookCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 未入力の項目も同じ位置に「未記入」と出し、人によって形を変えない。
-                _birthdayRow(),
+                _pairRow(
+                  ('誕生日', profile.birthdayLabel),
+                  ('星座', profile.zodiac),
+                ),
+                const SizedBox(height: 14),
+                _pairRow(
+                  ('出身地', profile.hometown),
+                  ('血液型', profile.bloodTypeLabel),
+                ),
                 const Divider(color: AppColors.border, height: 24),
                 const _CaptionLabel('好きなもの'),
                 const SizedBox(height: 6),
@@ -501,6 +513,22 @@ class ProfileBookCard extends StatelessWidget {
                 const _CaptionLabel('趣味'),
                 const SizedBox(height: 6),
                 _ValueText(profile.hobby),
+                const Divider(color: AppColors.border, height: 32),
+                const _BookSubheading(english: 'Future', title: 'これからのこと'),
+                const SizedBox(height: 12),
+                _labeled('今年の目標', profile.goalThisYear),
+                const SizedBox(height: 14),
+                _labeled('行ってみたいところ', profile.wantToGo),
+                const SizedBox(height: 14),
+                _labeled('やってみたいこと', profile.wantToTry),
+                const Divider(color: AppColors.border, height: 32),
+                const _BookSubheading(english: 'Which one?', title: 'どっち派？'),
+                const SizedBox(height: 10),
+                for (final question in whichOneQuestions)
+                  _WhichOneAnswer(
+                    question: question,
+                    selected: profile.whichOne[question.id],
+                  ),
                 const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
@@ -591,16 +619,18 @@ class ProfileBookCard extends StatelessWidget {
     ),
   );
 
-  Widget _birthdayRow() => IntrinsicHeight(
-    child: Row(
-      children: [
-        Expanded(child: _labeled('誕生日', profile.birthdayLabel)),
-        const VerticalDivider(color: AppColors.border, width: 1),
-        const SizedBox(width: 16),
-        Expanded(child: _labeled('星座', profile.zodiac)),
-      ],
-    ),
-  );
+  /// 2つの項目を縦線で区切って横に並べる。
+  Widget _pairRow((String, String?) left, (String, String?) right) =>
+      IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(child: _labeled(left.$1, left.$2)),
+            const VerticalDivider(color: AppColors.border, width: 1),
+            const SizedBox(width: 16),
+            Expanded(child: _labeled(right.$1, right.$2)),
+          ],
+        ),
+      );
 
   Widget _labeled(String label, String? value) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,6 +639,74 @@ class ProfileBookCard extends StatelessWidget {
       const SizedBox(height: 6),
       _ValueText(value),
     ],
+  );
+}
+
+/// プロフィール帳のカード内の小見出し。「Future これからのこと」の形式。
+class _BookSubheading extends StatelessWidget {
+  const _BookSubheading({required this.english, required this.title});
+
+  final String english;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.baseline,
+    textBaseline: TextBaseline.alphabetic,
+    children: [
+      Text(english, style: serifItalic(size: 13)),
+      const SizedBox(width: 8),
+      Text(
+        title,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+    ],
+  );
+}
+
+/// 紙のプロフィール帳の「【 犬 ・ 猫 】派」のように、選んだほうに色を付けて並べる。
+/// 未回答なら、どちらにも色を付けない。
+class _WhichOneAnswer extends StatelessWidget {
+  const _WhichOneAnswer({required this.question, required this.selected});
+
+  final WhichOneQuestion question;
+  final String? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    const bracket = TextStyle(fontSize: 13, color: AppColors.hint);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Text('【 ', style: bracket),
+          for (final (i, option) in question.options.indexed) ...[
+            if (i > 0) const Text(' ・ ', style: bracket),
+            _option(option.label, selected == option.id),
+          ],
+          const Text(' 】', style: bracket),
+          const Text('派', style: TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _option(String label, bool chosen) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: chosen ? AppColors.pink : null,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: chosen ? AppColors.accent : Colors.transparent),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: chosen ? FontWeight.w700 : FontWeight.w400,
+        color: chosen ? AppColors.accent : AppColors.hint,
+      ),
+    ),
   );
 }
 

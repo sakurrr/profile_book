@@ -73,6 +73,12 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
   late final _nickname = TextEditingController(text: _initial.nickname);
   late final _hobby = TextEditingController(text: _initial.hobby);
   late final _message = TextEditingController(text: _initial.message);
+  late final _hometown = TextEditingController(text: _initial.hometown);
+  late final _goalThisYear = TextEditingController(text: _initial.goalThisYear);
+  late final _wantToGo = TextEditingController(text: _initial.wantToGo);
+  late final _wantToTry = TextEditingController(text: _initial.wantToTry);
+  late String? _bloodType = _initial.bloodType;
+  late Map<String, String> _whichOne = {..._initial.whichOne};
   late List<String> _likes = [...?_initial.likes];
   late int? _birthYear = _initial.birthYear;
   late int? _birthMonth = _initial.birthMonth;
@@ -90,6 +96,10 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
       _nickname,
       _hobby,
       _message,
+      _hometown,
+      _goalThisYear,
+      _wantToGo,
+      _wantToTry,
     ]) {
       controller.dispose();
     }
@@ -115,9 +125,15 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
     birthYear: _birthYear,
     birthMonth: _birthMonth,
     birthDay: _birthDay,
+    hometown: _orNull(_hometown),
+    bloodType: _bloodType,
     likes: _likes.isEmpty ? null : _likes,
     hobby: _orNull(_hobby),
     message: _orNull(_message),
+    goalThisYear: _orNull(_goalThisYear),
+    wantToGo: _orNull(_wantToGo),
+    wantToTry: _orNull(_wantToTry),
+    whichOne: _whichOne,
     avatarAsset: _initial.avatarAsset,
   );
 
@@ -277,8 +293,14 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
     }
   }
 
-  Widget _field(TextEditingController controller, {String? hint}) => TextField(
+  Widget _field(
+    TextEditingController controller, {
+    String? hint,
+    int maxLines = 1,
+  }) => TextField(
     controller: controller,
+    minLines: 1,
+    maxLines: maxLines,
     style: const TextStyle(fontSize: 13),
     decoration: InputDecoration(hintText: hint),
   );
@@ -366,6 +388,23 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const FieldLabel('出身地'),
+                            _field(_hometown, hint: '例：福岡県'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: _bloodTypeField()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   FieldLabel(
                     '好きなもの',
                     trailing: '${_likes.length} / $_maxLikes',
@@ -396,6 +435,45 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
                           ),
                         ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            PaperCard(
+              padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionTitle(number: '02', title: 'これからのこと'),
+                  const SizedBox(height: 14),
+                  const FieldLabel('今年の目標'),
+                  _field(_goalThisYear, hint: '例：毎朝ランニングする', maxLines: 3),
+                  const SizedBox(height: 12),
+                  const FieldLabel('行ってみたいところ'),
+                  _field(_wantToGo, hint: '例：北海道の旭山動物園', maxLines: 3),
+                  const SizedBox(height: 12),
+                  const FieldLabel('やってみたいこと'),
+                  _field(_wantToTry, hint: '例：スキューバダイビング', maxLines: 3),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            PaperCard(
+              padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionTitle(number: '03', title: 'どっち派？'),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'もう一度タップすると選択を外せます',
+                    style: TextStyle(fontSize: 9, color: AppColors.subText),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final (i, question) in whichOneQuestions.indexed) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _whichOneRow(question),
+                  ],
                 ],
               ),
             ),
@@ -490,6 +568,61 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
     );
   }
 
+  Widget _bloodTypeField() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const FieldLabel('血液型'),
+      DropdownButtonFormField<String?>(
+        initialValue: _bloodType,
+        style: const TextStyle(fontSize: 13, color: AppColors.ink),
+        decoration: const InputDecoration(
+          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        ),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('未設定')),
+          for (final type in bloodTypes)
+            DropdownMenuItem(value: type, child: Text('$type型')),
+        ],
+        onChanged: (type) => setState(() => _bloodType = type),
+      ),
+    ],
+  );
+
+  /// 「犬 派 vs 猫 派」の2択。選択中の選択肢をもう一度押すと未回答に戻す。
+  Widget _whichOneRow(WhichOneQuestion question) {
+    final selected = _whichOne[question.id];
+    void select(String option) => setState(() {
+      _whichOne = {..._whichOne};
+      if (selected == option) {
+        _whichOne.remove(question.id);
+      } else {
+        _whichOne[question.id] = option;
+      }
+    });
+
+    return Row(
+      children: [
+        for (final (i, option) in question.options.indexed) ...[
+          if (i > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                'vs',
+                style: serifItalic(size: 11, color: AppColors.subText),
+              ),
+            ),
+          Expanded(
+            child: _WhichOneChoice(
+              label: option.label,
+              selected: selected == option.id,
+              onTap: () => select(option.id),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _likesEditor() => Wrap(
     spacing: 6,
     runSpacing: 6,
@@ -518,6 +651,51 @@ class _MyProfileFormState extends ConsumerState<_MyProfileForm> {
           ),
         ),
     ],
+  );
+}
+
+class _WhichOneChoice extends StatelessWidget {
+  const _WhichOneChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      height: 40,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.pink : AppColors.field,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: selected ? AppColors.accent : AppColors.border,
+        ),
+      ),
+      child: Text.rich(
+        TextSpan(
+          text: label,
+          children: const [
+            TextSpan(text: ' 派', style: TextStyle(fontSize: 10)),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+          color: selected ? AppColors.accent : AppColors.subText,
+        ),
+      ),
+    ),
   );
 }
 

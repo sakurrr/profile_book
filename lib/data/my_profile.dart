@@ -35,9 +35,15 @@ class MyProfileNotifier extends AsyncNotifier<Profile> {
           'birth_year': profile.birthYear,
           'birth_month': profile.birthMonth,
           'birth_day': profile.birthDay,
+          'hometown': profile.hometown,
+          'blood_type': profile.bloodType,
           'likes': profile.likes,
           'hobby': profile.hobby,
           'message': profile.message,
+          'goal_this_year': profile.goalThisYear,
+          'want_to_go': profile.wantToGo,
+          'want_to_try': profile.wantToTry,
+          'which_one': profile.whichOne,
         })
         .eq('id', profile.id)
         .select()

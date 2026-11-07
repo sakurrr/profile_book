@@ -46,9 +46,15 @@ auth.users ─1:1─ profiles ─1:1─ exchange_codes
 | `birth_year` | smallint | 可 | 誕生年。任意。入力するときは月日も必要 |
 | `birth_month` | smallint | 可 | 誕生月。誕生日は月と日の両方を入力するか、両方を未入力にする |
 | `birth_day` | smallint | 可 | 誕生日の日 |
+| `hometown` | text | 可 | 出身地 |
+| `blood_type` | text | 可 | 血液型。`A`、`B`、`O`、`AB` のいずれか |
 | `likes` | text[] | 可 | 好きなもの。最大5件。自由入力 |
 | `hobby` | text | 可 | 趣味 |
 | `message` | text | 可 | ひとこと。最大100文字 |
+| `goal_this_year` | text | 可 | 今年の目標 |
+| `want_to_go` | text | 可 | 行ってみたいところ |
+| `want_to_try` | text | 可 | やってみたいこと |
+| `which_one` | jsonb | 可 | どっち派？の回答。`{"pet": "cat"}` の形式。質問と選択肢はアプリで定義する |
 | `avatar_path` | text | 可 | Storage上のパス |
 | `created_at` | timestamptz | 不可 | 作成日時 |
 | `updated_at` | timestamptz | 不可 | 更新日時。トリガーで更新 |
@@ -113,9 +119,15 @@ create table public.profiles (
   birth_year  smallint check (birth_year between 1900 and 2100),
   birth_month smallint check (birth_month between 1 and 12),
   birth_day   smallint check (birth_day between 1 and 31),
+  hometown    text,
+  blood_type  text check (blood_type in ('A', 'B', 'O', 'AB')),
   likes       text[] check (cardinality(likes) <= 5),
   hobby       text,
   message     text check (char_length(message) <= 100),
+  goal_this_year text,
+  want_to_go     text,
+  want_to_try    text,
+  which_one      jsonb check (jsonb_typeof(which_one) = 'object'),
   avatar_path text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
@@ -362,7 +374,8 @@ revoke update on public.profiles from anon, authenticated;
 grant update (
   nickname, family_name, given_name, family_name_kana, given_name_kana,
   family_name_romaji, given_name_romaji, birth_year, birth_month, birth_day,
-  likes, hobby, message, avatar_path
+  hometown, blood_type, likes, hobby, message, goal_this_year, want_to_go,
+  want_to_try, which_one, avatar_path
 ) on public.profiles to authenticated;
 
 revoke update on public.friendships from anon, authenticated;

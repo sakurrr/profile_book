@@ -13,9 +13,15 @@ class Profile {
     this.birthYear,
     this.birthMonth,
     this.birthDay,
+    this.hometown,
+    this.bloodType,
     this.likes,
     this.hobby,
     this.message,
+    this.goalThisYear,
+    this.wantToGo,
+    this.wantToTry,
+    this.whichOne = const {},
     this.avatarAsset,
   });
 
@@ -33,9 +39,15 @@ class Profile {
     birthYear: json['birth_year'] as int?,
     birthMonth: json['birth_month'] as int?,
     birthDay: json['birth_day'] as int?,
+    hometown: json['hometown'] as String?,
+    bloodType: json['blood_type'] as String?,
     likes: (json['likes'] as List?)?.cast<String>(),
     hobby: json['hobby'] as String?,
     message: json['message'] as String?,
+    goalThisYear: json['goal_this_year'] as String?,
+    wantToGo: json['want_to_go'] as String?,
+    wantToTry: json['want_to_try'] as String?,
+    whichOne: {...?(json['which_one'] as Map?)?.cast<String, String>()},
   );
 
   final String id;
@@ -50,9 +62,19 @@ class Profile {
   final int? birthYear;
   final int? birthMonth;
   final int? birthDay;
+  final String? hometown;
+
+  /// `A`、`B`、`O`、`AB` のいずれか。
+  final String? bloodType;
   final List<String>? likes;
   final String? hobby;
   final String? message;
+  final String? goalThisYear;
+  final String? wantToGo;
+  final String? wantToTry;
+
+  /// どっち派？の回答。質問のidから、選んだ選択肢のidを引く。未回答の質問は入れない。
+  final Map<String, String> whichOne;
   final String? avatarAsset;
 
   /// 「佐藤 みお」の形式。姓と名がどちらもなければ null。
@@ -75,6 +97,8 @@ class Profile {
 
   String? get zodiac =>
       birthMonth == null ? null : zodiacOf(birthMonth!, birthDay!);
+
+  String? get bloodTypeLabel => bloodType == null ? null : '$bloodType型';
 
   /// ホームのカードで使う、ひとことの1行目。
   String? get messageHeadline => message?.split('\n').first;
@@ -113,6 +137,32 @@ String zodiacOf(int month, int day) {
   const startDays = [20, 19, 21, 20, 21, 22, 23, 23, 23, 24, 23, 22];
   return names[day < startDays[month - 1] ? month - 1 : month];
 }
+
+const bloodTypes = ['A', 'B', 'O', 'AB'];
+
+/// どっち派？の質問。選択肢は2つで、DBには選んだ選択肢の [id] を保存する。
+class WhichOneQuestion {
+  const WhichOneQuestion(this.id, this.options);
+
+  final String id;
+  final List<({String id, String label})> options;
+}
+
+const whichOneQuestions = [
+  WhichOneQuestion('pet', [(id: 'dog', label: '犬'), (id: 'cat', label: '猫')]),
+  WhichOneQuestion('holiday', [
+    (id: 'indoor', label: 'インドア'),
+    (id: 'outdoor', label: 'アウトドア'),
+  ]),
+  WhichOneQuestion('breakfast', [
+    (id: 'rice', label: 'ごはん'),
+    (id: 'bread', label: 'パン'),
+  ]),
+  WhichOneQuestion('snack', [
+    (id: 'kinoko', label: 'きのこの山'),
+    (id: 'takenoko', label: 'たけのこの里'),
+  ]),
+];
 
 /// `friendships` の1行と、相手の `profiles` を合わせたもの。
 class Friend {
